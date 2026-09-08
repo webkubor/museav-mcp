@@ -28,7 +28,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/webkubor/museav-mcp.git"
+    "url": "git+https://github.com/webkubor/museav-mcp.git"
   },
   "homepage": "https://docs.museav.top/cli/mcp",
   "bugs": {
