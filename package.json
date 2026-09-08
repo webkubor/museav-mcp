@@ -1,6 +1,6 @@
 {
   "name": "museav-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server — 把 museav-cli（MUSE AV 出图中台）的能力暴露给 AI Agent：出图、抠图、超分放大、去水印、压缩，以及发布 Skill 到小红书 SkillHub",
   "type": "module",
   "bin": {
