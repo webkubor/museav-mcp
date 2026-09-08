@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.1 (2026-09-08)
+
+### 首次走 CI 发版
+
+1.0.0 是本地 `npm publish` 发的——首发时包在 npm 上还不存在，Trusted Publishing
+没法预先绑定仓库，所以那版没有 provenance。这版起走 GitHub Actions：
+三重版本校验（tag / package.json / CHANGELOG 顶部）→ 真起一次 stdio server 冒烟
+→ `npm publish --provenance`。
+
+功能没有变化，工具仍是 1.0.0 那八个。
+
+- chore: `repository.url` 用 `git+https` 形式，去掉 `npm publish` 的规范化警告
+
 ## 1.0.0 (2026-09-08)
 
 ### 首次发布到 npm：一行接入，不用再 clone
