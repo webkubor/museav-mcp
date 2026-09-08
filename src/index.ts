@@ -8,6 +8,9 @@
  *   - upscale_image    本地超分放大（Real-ESRGAN 4x，免登录）
  *   - remove_watermark 本地去水印（LaMa 修复，免登录）
  *   - compress_image   本地压缩图片（sharp，免登录）
+ *   - skillhub_tags    查小红书 SkillHub 内容标签（发布必须带，不硬编码）
+ *   - skillhub_whoami  查 SkillHub 登录态
+ *   - skillhub_publish 发布本地 Skill 到小红书 SkillHub（**默认 dry-run**）
  *
  * 传输：stdio。所有图片文件以绝对路径传递，处理结果写回磁盘并返回路径。
  */
@@ -34,11 +37,21 @@ function requireFile(p: string | undefined, label: string): string {
   return p;
 }
 
-async function runMuseav(args: string[]): Promise<string> {
+/** skill 入参可以是目录，也可以是 .zip 源包——两者都要，所以不能用 requireFile */
+function requireSkillPath(p: string | undefined): string {
+  if (!p) throw new Error("缺少必填参数: path（skill 目录或 .zip 源包的绝对路径）");
+  if (!existsSync(p)) throw new Error(`skill 路径不存在: ${p}`);
+  if (!statSync(p).isDirectory() && !p.endsWith(".zip")) {
+    throw new Error(`skill 路径要么是目录、要么是 .zip 源包，收到: ${p}`);
+  }
+  return p;
+}
+
+async function runMuseav(args: string[], timeout = 600_000): Promise<string> {
   const bin = resolveMuseavBin();
   try {
     const { stdout, stderr } = await execFileAsync(bin, args, {
-      timeout: 600_000, // 本地模型/超分可能较慢
+      timeout, // 默认 600s：本地模型/超分可能较慢
     });
     return (stdout.trim() || stderr.trim()).slice(0, 2000);
   } catch (err: any) {
@@ -170,6 +183,91 @@ server.tool(
     if (params.quality) args.push("--quality", String(params.quality));
     if (params.format) args.push("--format", params.format);
     const out = await runMuseav(args);
+    return { content: [{ type: "text", text: out }] };
+  }
+);
+
+/**
+ * SkillHub 是否已登录。whoami 未登录也返回 0，所以只能解析回执里的 loggedIn；
+ * 解析不出来时按「未登录」处理——宁可多让用户登一次，也不能让 MCP 挂在扫码上死等。
+ */
+async function skillhubLoggedIn(): Promise<boolean> {
+  try {
+    const out = await runMuseav(["skillhub", "whoami"], 60_000);
+    const line = out.split("\n").filter((l) => l.includes("RESULT_JSON:")).at(-1);
+    if (!line) return false;
+    const parsed = JSON.parse(line.slice(line.indexOf("RESULT_JSON:") + "RESULT_JSON:".length));
+    return parsed?.credentials?.loggedIn === true;
+  } catch {
+    return false;
+  }
+}
+
+// ---------- 工具 6-8：小红书 SkillHub ----------
+//
+// 为什么真提交要先卡登录态：未登录时 CLI 会打印二维码**并阻塞等扫码**，而 MCP 走
+// execFile —— 要等进程结束才拿到输出，二维码根本传不到用户眼前，就是死锁。
+// 所以这里未登录直接报错，让 agent 引导用户去终端登录，而不是挂在那儿。
+server.tool(
+  "skillhub_tags",
+  "查小红书 SkillHub 的内容标签（发布必须带 tag，清单实时拉取，不要硬编码）",
+  {},
+  async () => {
+    const out = await runMuseav(["skillhub", "tags"], 60_000);
+    return { content: [{ type: "text", text: out }] };
+  }
+);
+
+server.tool(
+  "skillhub_whoami",
+  "查小红书 SkillHub 登录态（脱敏）。真提交前先查这个，未登录要让用户在终端跑 museav skillhub login 扫码",
+  {},
+  async () => {
+    const out = await runMuseav(["skillhub", "whoami"], 60_000);
+    return { content: [{ type: "text", text: out }] };
+  }
+);
+
+server.tool(
+  "skillhub_publish",
+  "发布本地 Skill 到小红书 SkillHub。**默认 dry-run**（只本地打包校验、不上传不提交），" +
+    "把待提交内容返回给用户核对；只有用户明确说「提交/确认/submit」时才带 submit=true 真提交。" +
+    "提交不可逆：Skill ID 是平台主键，跨版本不可改名。",
+  {
+    path: z.string().describe("本地 skill 目录或 .zip 源包的绝对路径（目录里必须有 SKILL.md）"),
+    tag: z.string().describe("内容标签中文名，多个用逗号分隔；清单先用 skillhub_tags 拉，不要硬编码"),
+    source: z.enum(["original", "repost"]).optional().describe("内容来源，默认 original（原创）"),
+    repostSource: z.string().optional().describe("转载来源平台名（15 字以内），source=repost 时必填"),
+    identifier: z.string().optional().describe("Skill ID（kebab-case，平台主键，跨版本不可改）；不传则由 CLI 从名称/目录名派生"),
+    submit: z.boolean().optional().describe("true=真提交（不可逆，需已登录）；不传/false=只 dry-run 预演"),
+  },
+  async (params) => {
+    const skillPath = requireSkillPath(params.path);
+    const args = ["skillhub", "publish", skillPath, "--tag", params.tag];
+    if (params.source) args.push("--source", params.source);
+    if (params.repostSource) args.push("--repost-source", params.repostSource);
+    if (params.identifier) args.push("--identifier", params.identifier);
+
+    if (!params.submit) {
+      const out = await runMuseav(args, 180_000);
+      return {
+        content: [{
+          type: "text",
+          text: `${out}\n\n（以上是 dry-run 预演，尚未提交。用户明确说「提交/确认/submit」后，再带 submit=true 调一次）`,
+        }],
+      };
+    }
+
+    // 真提交：先确认已登录，避免 CLI 挂在扫码上等一个谁也看不见的二维码。
+    // 注意 whoami 未登录时**退出码是 0**（返回 {"loggedIn":false}），不能靠 try/catch 判断，
+    // 必须读回执里的 loggedIn。
+    if (!(await skillhubLoggedIn())) {
+      throw new Error(
+        "SkillHub 未登录，MCP 里没法扫码（二维码要等进程结束才能返回，会死锁）。" +
+        "请让用户在自己终端跑一次：museav skillhub login —— 用小红书 App 扫码，完成后再回来提交。",
+      );
+    }
+    const out = await runMuseav([...args, "--yes"], 900_000);
     return { content: [{ type: "text", text: out }] };
   }
 );

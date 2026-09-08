@@ -13,8 +13,20 @@
 | `upscale_image` | 超分放大（Real-ESRGAN + Vulkan GPU），默认 4x | 免登录，本地跑 |
 | `remove_watermark` | 去水印（LaMa 修复），自动定位，可传手工掩码 | 免登录，本地跑 |
 | `compress_image` | 压缩（sharp），可指定最长边 / 质量 / 格式 | 免登录，本地跑 |
+| `skillhub_tags` | 查小红书 SkillHub 内容标签（实时拉，别硬编码） | 免登录 |
+| `skillhub_whoami` | 查 SkillHub 登录态 | 免登录 |
+| `skillhub_publish` | 发布本地 Skill 到小红书 SkillHub，**默认 dry-run** | 真提交才需要 |
 
-除 `gen_background` 外都在本地跑，不联网、不消耗中台额度。
+本地后期那四个不联网、不消耗中台额度。
+
+### `skillhub_publish` 的两条硬规矩
+
+1. **默认只预演**：不带 `submit=true` 就只做本地打包 + 校验，不上传不提交，把待提交内容
+   返回给人核对。只有用户明确说「提交 / 确认 / submit」才带 `submit=true`——
+   提交不可逆，Skill ID 是平台主键、跨版本不可改名。
+2. **真提交前必须已登录**：未登录时底层 CLI 会打印二维码**并阻塞等扫码**，而 MCP 走
+   `execFile`，要等进程结束才拿到输出——二维码根本传不到人眼前，就是死锁。所以这里
+   直接报错，引导用户去自己终端跑一次 `museav skillhub login`。
 
 ## 前置条件
 
@@ -26,24 +38,32 @@ museav --version        # 确认可用
 ```
 
 `gen_background` 还需要中台 apiKey（按 museav-cli 的说明配置）。本地那四个工具首次运行会下载对应模型。
+`skillhub_*` 需要 `museav` >= 3.1.0。
 
 ## 安装
 
+先装底层 CLI（工具都是壳，真活是它干的；`skillhub_*` 需要 >= 3.1.0）：
+
 ```bash
-pnpm install
-pnpm build       # 产物在 dist/，package.json 的 bin 指向它
+npm i -g museav-cli
 ```
 
 ## 接到 Agent 上
 
-以 Claude Code 为例，在 MCP 配置里加：
+一行：
+
+```bash
+claude mcp add museav -- npx -y museav-mcp
+```
+
+或手写配置（Claude Code / 任意支持 MCP 的 Agent）：
 
 ```json
 {
   "mcpServers": {
     "museav": {
-      "command": "node",
-      "args": ["/绝对路径/museav-mcp/dist/index.js"]
+      "command": "npx",
+      "args": ["-y", "museav-mcp"]
     }
   }
 }
@@ -55,18 +75,26 @@ pnpm build       # 产物在 dist/，package.json 的 bin 指向它
 {
   "mcpServers": {
     "museav": {
-      "command": "node",
-      "args": ["/绝对路径/museav-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "museav-mcp"],
       "env": { "MUSEAV_BIN": "/绝对路径/museav" }
     }
   }
 }
 ```
 
+### 本地开发（改这个仓库时）
+
+```bash
+pnpm install && pnpm build     # 产物在 dist/，package.json 的 bin 指向它
+```
+
+配置里把 `command` 换成 `node`、`args` 指向 `/绝对路径/museav-mcp/dist/index.js` 即可。
+
 ## 验证
 
 ```bash
-node test-mcp.mjs      # 起 server 跑 initialize + tools/list，应输出 TOOLS_LIST_OK count = 5
+node test-mcp.mjs      # 起 server 跑 initialize + tools/list，应输出 TOOLS_LIST_OK count = 8
 ```
 
 ## 说明

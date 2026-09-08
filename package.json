@@ -1,7 +1,7 @@
 {
   "name": "museav-mcp",
   "version": "1.0.0",
-  "description": "MCP server — 把 museav-cli（MUSE AV 出图中台）的后期能力暴露给 WorkBuddy/AI Agent：出图背景、抠图、超分放大、去水印、压缩",
+  "description": "MCP server — 把 museav-cli（MUSE AV 出图中台）的能力暴露给 AI Agent：出图、抠图、超分放大、去水印、压缩，以及发布 Skill 到小红书 SkillHub",
   "type": "module",
   "bin": {
     "museav-mcp": "dist/index.js"
@@ -10,7 +10,9 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "prepublishOnly": "pnpm build",
+    "test": "node test-mcp.mjs"
   },
   "engines": {
     "node": ">=20.19"
@@ -23,5 +25,33 @@
     "@types/node": "^24.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/webkubor/museav-mcp.git"
+  },
+  "homepage": "https://docs.museav.top/cli/mcp",
+  "bugs": {
+    "url": "https://github.com/webkubor/museav-mcp/issues"
+  },
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "museav",
+    "museav-mcp",
+    "ai-agent",
+    "image-generation",
+    "skillhub",
+    "小红书",
+    "出图"
+  ],
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }

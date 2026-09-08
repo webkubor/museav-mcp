@@ -1,0 +1,95 @@
+name: Publish to npm
+
+# 触发：推 v* tag（推荐），或手动跑一次
+#   git tag v1.1.0 && git push origin v1.1.0
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write      # Trusted Publishing(OIDC) 与 --provenance 都依赖它
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      # Trusted Publishing 需要 npm >= 11.5.1，runner 自带的通常更旧
+      - name: 升级 npm
+        run: npm install -g npm@latest
+
+      - run: pnpm install --frozen-lockfile
+      - run: npx tsc --noEmit
+      - run: pnpm build
+
+      # 防手滑：tag 触发时校验 tag 与 package.json 的 version 一致
+      - name: 校验版本号与 tag 一致
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          PKG=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::tag v$TAG 与 package.json 的 $PKG 不一致，先对齐再发"
+            exit 1
+          fi
+          echo "版本一致：$PKG"
+
+      # 防空介绍：发布卡片的内容取 CHANGELOG.md 顶部一节，npm version 不会写 CHANGELOG，
+      # 不校验的话卡片会带着上一版的旧介绍发到群里（museav-cli 3.0.2 踩过）
+      - name: 校验 CHANGELOG 顶部版本与发版一致
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TOP=$(awk '/^## /{print $2; exit}' CHANGELOG.md)
+          PKG=$(node -p "require('./package.json').version")
+          if [ "$TOP" != "$PKG" ]; then
+            echo "::error::CHANGELOG.md 顶部是 $TOP，与要发的 $PKG 不一致。发版前先写好本版本的更新说明（npm version 不会自动写）。"
+            exit 1
+          fi
+          echo "CHANGELOG 顶部版本一致：$TOP"
+
+      # 冒烟：真起一次 stdio server，确认 initialize + tools/list 通得过再发
+      - name: 冒烟测试（server 能起、工具列得出）
+        run: node test-mcp.mjs
+
+      # 认证走哪条由仓库配置决定，二选一，不用改这个文件：
+      #   ① Trusted Publishing（推荐，无 token）——在 npmjs.com 的包设置里
+      #      绑定本仓库 + 本 workflow 文件名(publish.yml)，然后别设 NPM_TOKEN secret。
+      #   ② NPM_TOKEN 兜底——建 Granular token（Read and write），存进仓库 Secrets。
+      - name: 发布
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # 发布后回调业务中台：POST /api/cli-release，由中台统一记录更新日志 +
+      # 用 App 发卡片通知到目标群。群清单与卡片格式都是中台的事，GitHub 只传
+      # 包名/版本/更新说明——package 字段让中台认出这是 MCP（卡片给的是接入命令
+      # 和 MCP 文档，不是 npm i -g）。
+      - name: 回调业务中台（记录发布 + 群通知）
+        env:
+          CLI_RELEASE_TOKEN: ${{ secrets.CLI_RELEASE_TOKEN }}
+        run: |
+          # GitHub Actions 的 if: 表达式不能直接用 secrets（Unrecognized named-value），
+          # 只能把 secret 放进 env，再在 run 里判断是否配置。
+          if [ -z "$CLI_RELEASE_TOKEN" ]; then
+            echo "未配置 CLI_RELEASE_TOKEN，跳过发布通知（不影响 npm 发布）"
+            exit 0
+          fi
+          VERSION=$(node -p "require('./package.json').version")
+          BODY=$(awk '/^## /{if(n++) exit} {print}' CHANGELOG.md | head -15)
+          curl -s -X POST "https://manager.museav.top/api/cli-release" \
+            -H "Authorization: Bearer $CLI_RELEASE_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n --arg p museav-mcp --arg v "$VERSION" --arg c "$BODY" '{package: $p, version: $v, changes: $c}')" \
+            || echo "回调业务中台失败(忽略，不影响发布)"
