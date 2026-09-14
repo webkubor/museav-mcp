@@ -11,6 +11,10 @@
  *   - skillhub_tags    查小红书 SkillHub 内容标签（发布必须带，不硬编码）
  *   - skillhub_whoami  查 SkillHub 登录态
  *   - skillhub_publish 发布本地 Skill 到小红书 SkillHub（**默认 dry-run**）
+ *   - vlm_describe     本地看图理解（mlx-vlm-kit，Qwen3-VL，免登录、零成本）
+ *   - vlm_ask          对图片任意提问（本地 MLX，同上）
+ *   - vlm_cover_check  音乐封面语义质检（本地 MLX，--batch 支持目录）
+ *   - vlm_reverse_prompt 反推出图 prompt（喂回 gen 复刻同风格）
  *
  * 传输：stdio。所有图片文件以绝对路径传递，处理结果写回磁盘并返回路径。
  */
@@ -202,6 +206,86 @@ async function skillhubLoggedIn(): Promise<boolean> {
     return false;
   }
 }
+
+// ---------- 工具 5.5：本地看图理解（mlx-vlm-kit） ----------
+//
+// 免登录、零成本（本地 Qwen3-VL-4B，Apple MLX）。
+// 与 museav reverse 的分工：reverse 走中台/本地 Ollama 专做「反推 SCULPT prompt」；
+// vlm_* 是通用看图问答（描述/质检/任意提问），两者互补。
+// 依赖：pipx install git+https://github.com/webkubor/mlx-vlm-kit.git（全局 vlm 命令）
+function resolveVlmBin(): string {
+  const env = process.env.MLX_VLM_BIN;
+  if (env && existsSync(env)) return env;
+  return "vlm";
+}
+
+async function runVlm(args: string[], timeout = 300_000): Promise<string> {
+  const bin = resolveVlmBin();
+  try {
+    const { stdout } = await execFileAsync(bin, args, { timeout });
+    return stdout.trim().slice(0, 3000);
+  } catch (err: any) {
+    const detail = err?.stderr?.trim() || err?.message || String(err);
+    throw new Error(`vlm ${args[0]} 执行失败: ${detail}`.slice(0, 2000));
+  }
+}
+
+server.tool(
+  "vlm_describe",
+  "本地看图理解：描述图片主体与色调（免费/离线，Qwen3-VL）",
+  { image: z.string().describe("图片绝对路径") },
+  async (params) => {
+    const file = requireFile(params.image, "image");
+    const out = await runVlm(["describe", file]);
+    return { content: [{ type: "text", text: out }] };
+  }
+);
+
+server.tool(
+  "vlm_ask",
+  "对图片任意提问（本地看图理解，免费/离线）",
+  {
+    image: z.string().describe("图片绝对路径"),
+    q: z.string().describe("要问的问题"),
+  },
+  async (params) => {
+    const file = requireFile(params.image, "image");
+    const out = await runVlm(["ask", file, "--q", params.q]);
+    return { content: [{ type: "text", text: out }] };
+  }
+);
+
+server.tool(
+  "vlm_cover_check",
+  "音乐封面语义质检：有无标题/主体/色调/是否合格。--batch 传目录",
+  {
+    image: z.string().describe("图片或目录绝对路径"),
+    batch: z.boolean().optional().describe("目录递归批量质检"),
+  },
+  async (params) => {
+    const p = params.image;
+    if (!existsSync(p)) throw new Error(`路径不存在: ${p}`);
+    const args = ["cover-check", p];
+    if (params.batch || statSync(p).isDirectory()) args.push("--batch");
+    const out = await runVlm(args);
+    return { content: [{ type: "text", text: out }] };
+  }
+);
+
+server.tool(
+  "vlm_reverse_prompt",
+  "反推出图 prompt（主体/风格/光线/构图），可直接喂 gen 复刻同风格",
+  {
+    image: z.string().describe("图片绝对路径"),
+    lang: z.enum(["en", "zh"]).optional().describe("输出语言，默认 en"),
+  },
+  async (params) => {
+    const file = requireFile(params.image, "image");
+    const args = ["reverse-prompt", file, "--lang", params.lang || "en"];
+    const out = await runVlm(args);
+    return { content: [{ type: "text", text: out }] };
+  }
+);
 
 // ---------- 工具 6-8：小红书 SkillHub ----------
 //
