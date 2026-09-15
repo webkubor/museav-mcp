@@ -1,8 +1,14 @@
 // 简单 MCP 协议测试客户端：spawn server，写入 initialize/tools/list，读取响应
+//
+// 工具数是个约定值：README / docs 都写着「TOOLS_LIST_OK count = 17」，
+// 这个断言就是让「加了工具忘了改文档」在 CI 里变红，而不是等人去发现。
+// 新增工具时把这个数一起改（只增不减，删工具是破坏性变更，得走大版本）。
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
+
+const EXPECTED_TOOL_COUNT = 17;
 
 const child = spawn("node", ["dist/index.js"], {
   cwd: dirname(fileURLToPath(import.meta.url)),
@@ -20,8 +26,16 @@ rl.on("line", (line) => {
   try {
     const msg = JSON.parse(line);
     if (msg.result && msg.result.tools) {
-      console.log("TOOLS_LIST_OK count =", msg.result.tools.length);
+      const count = msg.result.tools.length;
+      console.log("TOOLS_LIST_OK count =", count);
       for (const t of msg.result.tools) console.log("  -", t.name);
+      if (count !== EXPECTED_TOOL_COUNT) {
+        console.error(
+          `TOOLS_LIST_MISMATCH 期望 ${EXPECTED_TOOL_COUNT} 个，实际 ${count} 个 —— ` +
+          `改了工具就同步改这个常量，以及 README / docs 里写的数字`,
+        );
+        process.exit(1);
+      }
       process.exit(0);
     }
   } catch {}

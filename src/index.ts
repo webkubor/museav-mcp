@@ -2,12 +2,18 @@
 /**
  * museav-mcp — MUSE AV 出图中台后期能力 MCP Server
  *
- * 把 museav-cli 的后期/生成能力暴露为 MCP 工具，供 WorkBuddy / 任意 AI Agent 调用：
+ * 把 museav-cli 的生成/后期/素材能力暴露为 MCP 工具，供 Claude Code / DSH / WorkBuddy
+ * 或任意 AI Agent 调用：
  *   - gen_background   出背景图 / 出图 / 出视频（在线，走中台，需登录）
- *   - remove_bg        本地抠图去背景（ISNet/U2Net，免登录）
+ *   - remove_bg        本地抠图去背景（BiRefNet/ISNet/U2Net，免登录）
  *   - upscale_image    本地超分放大（Real-ESRGAN 4x，免登录）
  *   - remove_watermark 本地去水印（LaMa 修复，免登录）
  *   - compress_image   本地压缩图片（sharp，免登录）
+ *   - list_templates   查可用图片/文字模板（Agent 自己挑，别硬编码）
+ *   - list_skills      查可用技能（提示词在服务端展开，配合 gen 的 skill 用）
+ *   - list_jobs        查自己的出图工作流（生成结果与失败原因）
+ *   - upload_asset     上传素材拿公网直链（喂 gen 的 ref / 垫图）
+ *   - image_to_template 图生模板：读图 + 文字层逆向 + 变量化，建成可复用模板
  *   - skillhub_tags    查小红书 SkillHub 内容标签（发布必须带，不硬编码）
  *   - skillhub_whoami  查 SkillHub 登录态
  *   - skillhub_publish 发布本地 Skill 到小红书 SkillHub（**默认 dry-run**）
@@ -51,13 +57,37 @@ function requireSkillPath(p: string | undefined): string {
   return p;
 }
 
-async function runMuseav(args: string[], timeout = 600_000): Promise<string> {
+/**
+ * @param timeout  默认 600s：本地模型/超分可能较慢
+ * @param maxChars 回传上限。默认 2000 —— 出图/后期是单条结果，长了没用；
+ *                 清单类（templates / skills / jobs）要放宽，否则截断处正好是 Agent
+ *                 要读的模板清单，它只会以为「就这么多」。
+ * @param mode     取哪一路输出。**这个不是可有可无的开关**：museav 的双路输出是
+ *                 有分工的 —— stdout 给机器（`templates`/`skills` 是裸 id 列表），
+ *                 stderr 给人（带中文名、分类、字段、是否需垫图的表格）。
+ *                 Agent 要「挑一个模板」，挑的依据全在 stderr；只读 stdout 等于
+ *                 把 104 个模板压成一串 UUID 丢给它。`jobs` 反过来，stdout 是完整
+ *                 JSON（含 cdn_url / status / error），stderr 才是摘要。
+ */
+type OutMode = "stdout" | "stderr";
+
+async function runMuseav(
+  args: string[],
+  timeout = 600_000,
+  maxChars = 2000,
+  mode: OutMode = "stdout",
+): Promise<string> {
   const bin = resolveMuseavBin();
   try {
     const { stdout, stderr } = await execFileAsync(bin, args, {
       timeout, // 默认 600s：本地模型/超分可能较慢
     });
-    return (stdout.trim() || stderr.trim()).slice(0, 2000);
+    const raw = mode === "stderr"
+      ? (stderr.trim() || stdout.trim())
+      : (stdout.trim() || stderr.trim());
+    // 截断要留痕：不说，Agent 会把截断处当成清单的结尾。
+    const cut = raw.length > maxChars ? `\n…（输出已截断，共 ${raw.length} 字，用过滤参数收窄）` : "";
+    return raw.slice(0, maxChars) + cut;
   } catch (err: any) {
     const detail = err?.stderr?.trim() || err?.message || String(err);
     throw new Error(`museav ${args[0]} 执行失败: ${detail}`.slice(0, 2000));
@@ -66,24 +96,30 @@ async function runMuseav(args: string[], timeout = 600_000): Promise<string> {
 
 const server = new McpServer({
   name: "museav-mcp",
-  version: "1.0.0",
+  version: "1.1.0",
 });
 
 // ---------- 工具 1：出背景图 / 出图 ----------
 server.tool(
   "gen_background",
-  "用 MUSE AV 出图中台生成壁纸背景图/一般出图/出视频（在线，需登录）",
+  "用 MUSE AV 出图中台生成壁纸背景图/一般出图/出视频（在线，需登录）。" +
+    "选模板或技能前先用 list_templates / list_skills 查真实清单，不要硬编码 slug。",
   {
     prompt: z.string().optional().describe("出图提示词（与 skill/template 三选一）"),
-    skill: z.string().optional().describe("中台技能 slug，提示词在服务端展开"),
-    template: z.string().optional().describe("图片模板 id，提示词在服务端展开"),
+    skill: z.string().optional().describe("中台技能 slug，提示词在服务端展开（清单见 list_skills）"),
+    template: z.string().optional().describe("图片模板 id，提示词在服务端展开（清单见 list_templates）"),
     input: z.string().optional().describe("配合 skill 的一句业务描述"),
+    fields: z.string().optional().describe("配合 template 的占位符取值，JSON 对象字符串，如 '{\"artist\":\"王嘉尔\"}'；模板没有占位符就不用传"),
     ratio: z.enum(["3:4", "9:16", "1:1", "4:3", "16:9"]).optional().describe("宽高比"),
-    model: z.string().optional().describe("模型名，如 gpt-image-2"),
+    model: z.string().optional().describe("模型名，如 gpt-image-2；视频如 artsdance-2-0-pro-260801，不传走 auto 路由"),
     quality: z.enum(["low", "medium", "high"]).optional().describe("质量（仅 gpt-image）"),
-    ref: z.string().optional().describe("垫图文件绝对路径，多张用逗号分隔"),
+    ref: z.string().optional().describe("垫图文件绝对路径，多张用逗号分隔（最多 5 张，顺序对应提示词里的「图片1、图片2…」）"),
     transparent: z.boolean().optional().describe("透明背景 PNG（抠掉背景）"),
     video: z.boolean().optional().describe("生成视频"),
+    duration: z.number().optional().describe("视频时长（秒，仅 video=true 有意义，由模型与上游支持范围决定）"),
+    image: z.string().optional().describe("图生视频首帧图绝对路径（仅 video=true）"),
+    project: z.string().optional().describe("归档进该工作区（id 或名字，账户身份才生效）"),
+    batch: z.string().optional().describe("批量出图：文本文件绝对路径，每行一条（'#' 注释与空行跳过）；配合 skill/template 时每行是业务描述，否则是完整提示词"),
   },
   async (params) => {
     const args = ["gen"];
@@ -92,11 +128,16 @@ server.tool(
     if (params.prompt) args.push("--prompt", params.prompt);
     if (params.skill) { args.push("--skill", params.skill); if (params.input) args.push("--input", params.input); }
     if (params.template) args.push("--template", params.template);
+    if (params.fields) args.push("--fields", params.fields);
     if (params.ratio) args.push("--ratio", params.ratio);
     if (params.model) args.push("--model", params.model);
     if (params.quality) args.push("--quality", params.quality);
     if (params.transparent) args.push("--transparent");
     if (params.video) args.push("--video");
+    if (params.duration) args.push("--duration", String(params.duration));
+    if (params.image) { requireFile(params.image, "image（视频首帧）"); args.push("--image", params.image); }
+    if (params.project) args.push("--project", params.project);
+    if (params.batch) { requireFile(params.batch, "batch 清单"); args.push("--batch", params.batch); }
     if (params.ref) {
       const refs = String(params.ref).split(",").map((s) => s.trim()).filter(Boolean);
       for (const r of refs) { requireFile(r, "垫图"); args.push("--ref", r); }
@@ -109,17 +150,19 @@ server.tool(
 // ---------- 工具 2：抠图去背景 ----------
 server.tool(
   "remove_bg",
-  "本地抠图去背景（ISNet/U2Net，免登录），输出带 alpha 的 PNG",
+  "本地抠图去背景（BiRefNet/ISNet/U2Net，免登录），输出带 alpha 的 PNG",
   {
     file: z.string().describe("输入图片绝对路径"),
     out: z.string().optional().describe("输出路径（默认 <名>-nobg.png）"),
-    model: z.enum(["isnet", "u2net"]).optional().describe("模型，isnet 默认"),
+    model: z.enum(["birefnet", "isnet", "u2net"]).optional().describe("模型，birefnet 默认（细节最好，模型约 214MB）；isnet/u2net 更小"),
+    overwrite: z.boolean().optional().describe("输出文件已存在时是否覆盖（默认 false，CLI 会拒绝）"),
   },
   async (params) => {
     const file = requireFile(params.file, "file");
     const args = ["remove-bg", file];
     if (params.out) args.push("--out", params.out);
     if (params.model) args.push("--model", params.model);
+    if (params.overwrite) args.push("--overwrite");
     const out = await runMuseav(args);
     const resultPath = params.out || file.replace(/\.([^.]+)$/, "-nobg.png");
     return { content: [{ type: "text", text: `${out}\n输出文件路径: ${resultPath}` }] };
@@ -135,6 +178,7 @@ server.tool(
     out: z.string().optional().describe("输出路径"),
     scale: z.union([z.literal(2), z.literal(3), z.literal(4)]).optional().describe("放大倍数，默认 4"),
     model: z.enum(["realesrgan-x4plus", "realesrgan-x4plus-anime"]).optional().describe("模型"),
+    overwrite: z.boolean().optional().describe("输出文件已存在时是否覆盖（默认 false，CLI 会拒绝）"),
   },
   async (params) => {
     const file = requireFile(params.file, "file");
@@ -142,6 +186,7 @@ server.tool(
     if (params.out) args.push("--out", params.out);
     if (params.scale) args.push("--scale", String(params.scale));
     if (params.model) args.push("--model", params.model);
+    if (params.overwrite) args.push("--overwrite");
     const out = await runMuseav(args);
     const resultPath = params.out || file.replace(/\.([^.]+)$/, `-${params.scale || 4}x.png`);
     return { content: [{ type: "text", text: `${out}\n输出文件路径: ${resultPath}` }] };
@@ -156,12 +201,14 @@ server.tool(
     file: z.string().describe("输入图片绝对路径"),
     out: z.string().optional().describe("输出路径（默认 <名>-clean.png）"),
     mask: z.string().optional().describe("手工掩码图（白色=去除区），跳过自动定位"),
+    overwrite: z.boolean().optional().describe("输出文件已存在时是否覆盖（默认 false，CLI 会拒绝）"),
   },
   async (params) => {
     const file = requireFile(params.file, "file");
     const args = ["remove-watermark", file];
     if (params.out) args.push("--out", params.out);
     if (params.mask) { requireFile(params.mask, "mask"); args.push("--mask", params.mask); }
+    if (params.overwrite) args.push("--overwrite");
     const out = await runMuseav(args);
     const resultPath = params.out || file.replace(/\.([^.]+)$/, "-clean.png");
     return { content: [{ type: "text", text: `${out}\n输出文件路径: ${resultPath}` }] };
@@ -178,6 +225,7 @@ server.tool(
     maxEdge: z.number().optional().describe("最长边缩到此像素（等比）"),
     quality: z.number().optional().describe("jpg/webp 质量，默认 82"),
     format: z.enum(["jpg", "png", "webp"]).optional().describe("输出格式"),
+    overwrite: z.boolean().optional().describe("输出文件已存在时是否覆盖（默认 false，CLI 会拒绝）"),
   },
   async (params) => {
     const file = requireFile(params.file, "file");
@@ -186,7 +234,119 @@ server.tool(
     if (params.maxEdge) args.push("--max-edge", String(params.maxEdge));
     if (params.quality) args.push("--quality", String(params.quality));
     if (params.format) args.push("--format", params.format);
+    if (params.overwrite) args.push("--overwrite");
     const out = await runMuseav(args);
+    return { content: [{ type: "text", text: out }] };
+  }
+);
+
+// ---------- 工具 5.5：素材与清单（给 Agent 自己挑，别硬编码） ----------
+//
+// 为什么要有这几个「只读清单」：出图前那两个必填项 —— 模板 id、技能 slug ——
+// 都只能从中台实时拉。Agent 凭印象编一个出来，中台会报「模板不存在」，
+// 而它根本分不清是自己拼错了还是真没这个模板。清单工具就是把这一步补上。
+//
+// 清单回传上限放宽：默认 2000 会把列表从中间截断，而截断处正是 Agent 要读的那部分。
+// 8000 大约够 50 条模板 / 90 条技能；再长就该用 category / genre 收窄了。
+const LIST_LIMIT = 8000;
+
+server.tool(
+  "list_templates",
+  "查可用的图片/文字模板（自己租户建的 + 平台共享的）。gen_background 的 template 参数要从这里取，" +
+    "不要硬编码；清单很长时先用 category 收窄。模板自带哪些占位符看「字段:」那一列，取值用 fields 传。",
+  {
+    category: z.string().optional().describe("按分类过滤，如 电商白底图 / 演唱会"),
+    type: z.enum(["image", "article"]).optional().describe("图片模板还是文字模板，不传则两类都列并标注"),
+    scope: z.enum(["mine", "tenant", "platform"]).optional().describe("只看我建的 / 只看本租户的 / 只看平台共享的"),
+  },
+  async (params) => {
+    const args = ["templates"];
+    if (params.category) args.push("--category", params.category);
+    if (params.type) args.push("--type", params.type);
+    if (params.scope) args.push(`--${params.scope}`);
+    // stderr：带中文名/分类/比例/字段的可读表格；stdout 只有裸 id，Agent 挑不了
+    const out = await runMuseav(args, 120_000, LIST_LIMIT, "stderr");
+    return { content: [{ type: "text", text: out }] };
+  }
+);
+
+server.tool(
+  "list_skills",
+  "查可用技能（自己的私有技能 + 租户专属 + 公共技能库）。gen_background 的 skill 参数从这里取 slug，" +
+    "不要硬编码；清单很长时先用 genre 收窄。最后一列标了是否需垫图。",
+  {
+    genre: z.string().optional().describe("按分类过滤，如 电商 / 人像写真"),
+  },
+  async (params) => {
+    const args = ["skills"];
+    if (params.genre) args.push("--genre", params.genre);
+    const out = await runMuseav(args, 120_000, LIST_LIMIT, "stderr");
+    return { content: [{ type: "text", text: out }] };
+  }
+);
+
+server.tool(
+  "list_jobs",
+  "查自己名下的出图工作流（个人 login 看自己的，租户 apiKey 看业务下全部）。" +
+    "gen 失败、或要回头找出图结果 URL 时用它；服务端固定只返回最近 50 条。",
+  {
+    limit: z.number().optional().describe("最多显示几条（在最近 50 条以内截取），默认 20"),
+    status: z.enum(["pending", "processing", "done", "failed"]).optional().describe("按状态过滤"),
+    project: z.string().optional().describe("只看归档进该工作区的任务（id 或名字）"),
+  },
+  async (params) => {
+    const args = ["jobs"];
+    if (params.limit) args.push("--limit", String(params.limit));
+    if (params.status) args.push("--status", params.status);
+    if (params.project) args.push("--project", params.project);
+    const out = await runMuseav(args, 120_000, LIST_LIMIT);
+    return { content: [{ type: "text", text: out }] };
+  }
+);
+
+server.tool(
+  "upload_asset",
+  "上传素材（图片/音频/视频，按字节内容判类型）拿公网直链。gen_background 的垫图要的是 URL 时走它；" +
+    "本地文件直接传 ref 路径也行，不用先上传。",
+  {
+    file: z.string().describe("要上传的文件绝对路径"),
+    toWorks: z.boolean().optional().describe("同时收进「我的作品」（外面做好的成品用这个，参考图不用）"),
+    workspace: z.string().optional().describe("归档到指定工作区（id 或名字）"),
+  },
+  async (params) => {
+    const file = requireFile(params.file, "file");
+    const args = ["upload", file];
+    if (params.toWorks) args.push("--to-works");
+    if (params.workspace) args.push("--workspace", params.workspace);
+    const out = await runMuseav(args, 300_000);
+    return { content: [{ type: "text", text: out }] };
+  }
+);
+
+server.tool(
+  "image_to_template",
+  "图生模板：上传图或传图片 URL → 读图 + 文字层逆向 + 变量化 → 建成可复用图片模板（原图自动焊成参考图）。" +
+    "默认真建模板；只想看草稿、不想往模板库落东西时带 dryRun=true。",
+  {
+    input: z.string().describe("本地图片绝对路径，或图片 URL"),
+    dryRun: z.boolean().optional().describe("true=只看模板草稿不建模板（不消耗模板库）；不传=真建"),
+    name: z.string().optional().describe("模板中文名，不给则由中台生成"),
+    slug: z.string().optional().describe("模板 slug（全局唯一，撞了直接报错不覆盖），不给则由中台生成"),
+    category: z.string().optional().describe("模板分类，不给则按图片内容自动归类"),
+    variables: z.string().optional().describe("收窄变量白名单，逗号分隔，如 title,subject,location"),
+    labels: z.string().optional().describe("变量 → 你的业务叫法，JSON 对象字符串，如 '{\"subject\":\"艺人\"}'；只影响表单显示名"),
+  },
+  async (params) => {
+    const isUrl = /^https?:\/\//i.test(params.input);
+    const input = isUrl ? params.input : requireFile(params.input, "input（本地图片）");
+    const args = ["image-to-template", input];
+    if (params.dryRun) args.push("--no-create");
+    if (params.name) args.push("--name", params.name);
+    if (params.slug) args.push("--slug", params.slug);
+    if (params.category) args.push("--category", params.category);
+    if (params.variables) args.push("--variables", params.variables);
+    if (params.labels) args.push("--labels", params.labels);
+    const out = await runMuseav(args, 600_000);
     return { content: [{ type: "text", text: out }] };
   }
 );
