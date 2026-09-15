@@ -14,6 +14,10 @@
  *   - list_jobs        查自己的出图工作流（生成结果与失败原因）
  *   - upload_asset     上传素材拿公网直链（喂 gen 的 ref / 垫图）
  *   - image_to_template 图生模板：读图 + 文字层逆向 + 变量化，建成可复用模板
+ *   - reverse         读图反推 SCULPT prompt（中台 API；与 vlm_reverse_prompt 互补，图像识别仍优先 mlx-vlm-kit）
+ *   - list_models     查可用模型 / 视频档次（CLI 3.4.0+）
+ *   - balance         查上游余额
+ *   - list_video_templates 查可用视频模板（与 list_templates 平级）
  *   - skillhub_tags    查小红书 SkillHub 内容标签（发布必须带，不硬编码）
  *   - skillhub_whoami  查 SkillHub 登录态
  *   - skillhub_publish 发布本地 Skill 到小红书 SkillHub（**默认 dry-run**）
@@ -366,6 +370,78 @@ async function skillhubLoggedIn(): Promise<boolean> {
     return false;
   }
 }
+
+// ---------- 工具 5.6：补充能力（reverse / list_models / balance / video-templates） ----------
+//
+// reverse 走中台 API（默认）反推 SCULPT prompt，与下方 vlm_reverse_prompt（本地 mlx-vlm-kit）
+// 是**互补**而不是替代：vlm 是通用 prompt 反推（本地、免费），reverse 是平台专用 SCULPT 六要素
+// （中台、需登录），喂给 gen_background 更顺手。按用户的「图像识别优先 mlx-vlm-kit」原则，
+// 调本工具前先看 vlm_reverse_prompt 是否够用；只有当 SCULPT 格式或平台侧约束被显式要求时才走这里。
+server.tool(
+  "reverse",
+  "读图反推 SCULPT prompt（中台 API，stdout 输出英文 prompt；stderr 是结构化中文报告）。" +
+    "图像识别默认优先用本地的 vlm_describe / vlm_reverse_prompt（mlx-vlm-kit，免登录零成本）；" +
+    "本工具给出平台专用 SCULPT 格式，喂给 gen_background 更顺手。",
+  {
+    input: z.string().describe("本地图片绝对路径，或图片 URL"),
+    local: z.boolean().optional().describe("强制走本地 Ollama qwen3-vl（需自备 Ollama + 模型；与「图像识别优先 mlx-vlm-kit」原则相悖，留着只是因为偶尔要离线）"),
+  },
+  async (params) => {
+    const isUrl = /^https?:\/\//i.test(params.input);
+    const input = isUrl ? params.input : requireFile(params.input, "input（图片）");
+    const args = ["reverse", input];
+    if (params.local) args.push("--local");
+    // reverse 默认 stdout 一行英文 prompt，stderr 是结构化中文报告（SCULPT 六要素）。
+    // 默认取 stdout 便于管道；agent 若要中文报告可用本地跑 + stderr。
+    const out = await runMuseav(args, 300_000);
+    return { content: [{ type: "text", text: out }] };
+  }
+);
+
+// models / balance / video-templates：CLI 3.4.0 新增的运营/清单类工具
+server.tool(
+  "list_models",
+  "查可用模型（CLI 3.4.0+）。--video=true 查视频档次（如 Seedance 2.x 对外名），可直接喂给 " +
+    "gen_background 的 video=true + model 参数；不传则查图片模型。清单来自中台，CLI 不硬编码。",
+  {
+    video: z.boolean().optional().describe("查视频档次（对外名），可直接喂给 gen_background 的 video=true + model"),
+  },
+  async (params) => {
+    const args = ["models"];
+    if (params.video) args.push("--video");
+    // stderr：人类可读表格（label + 时长/分辨率）；stdout 只有 value 列表（脚本解析用）
+    const out = await runMuseav(args, 120_000, LIST_LIMIT, "stderr");
+    return { content: [{ type: "text", text: out }] };
+  }
+);
+
+server.tool(
+  "balance",
+  "查上游余额（平台账户视角，看自己的余额）。",
+  {},
+  async () => {
+    // stdout 输出完整 JSON（含 balance_cny / markup_pct / checked_at），比 stderr 的
+    // 「¥X.XX 加价率 N%」更结构化，agent 解析更稳
+    const out = await runMuseav(["balance"], 60_000);
+    return { content: [{ type: "text", text: out }] };
+  }
+);
+
+server.tool(
+  "list_video_templates",
+  "查可用视频模板（自己租户建的 + 平台共享的，与图片模板是两套表）。" +
+    "gen_background 的 video=true + template 组合从这里取 id，不要硬编码。",
+  {
+    category: z.string().optional().describe("按分类过滤，如 电商 / 换装视频"),
+  },
+  async (params) => {
+    const args = ["video-templates"];
+    if (params.category) args.push("--category", params.category);
+    // stderr：人类可读表格（id / 中文名 / 分类 / 比例 / 模型 / 字段 / 参考视频 / 归属）
+    const out = await runMuseav(args, 120_000, LIST_LIMIT, "stderr");
+    return { content: [{ type: "text", text: out }] };
+  }
+);
 
 // ---------- 工具 5.5：本地看图理解（mlx-vlm-kit） ----------
 //

@@ -7,7 +7,7 @@
 
 传输方式 stdio。图片以**绝对路径**传入，处理结果写回磁盘并返回路径 —— 不走 base64，大图不炸上下文。
 
-## 工具（17 个）
+## 工具（21 个）
 
 | 工具 | 干什么 | 是否需要登录 |
 |---|---|---|
@@ -18,9 +18,13 @@
 | `compress_image` | 压缩（sharp），可指定最长边 / 质量 / 格式 | 免登录，本地跑 |
 | `list_templates` | 查可用图片 / 文字模板（挑 `template` 用，别硬编码） | ✅ 需要 |
 | `list_skills` | 查可用技能（挑 `skill` slug 用，别硬编码） | ✅ 需要 |
+| `list_video_templates` | 查可用视频模板（与 `list_templates` 平级，配合 `gen_background` 的 `video=true` + `template`） | ✅ 需要 |
+| `list_models` | 查可用模型；`video=true` 查视频档次（可直接喂 `gen_background` 的 model） | ✅ 需要 |
+| `balance` | 查上游余额 | ✅ 需要 |
 | `list_jobs` | 查自己的出图工作流（结果 URL、失败原因） | ✅ 需要 |
 | `upload_asset` | 上传素材拿公网直链（垫图要 URL 时用） | ✅ 需要 |
 | `image_to_template` | 图生模板：读图 + 文字层逆向 + 变量化 | ✅ 需要 |
+| `reverse` | 读图反推 SCULPT prompt（中台 API）。**与 `vlm_reverse_prompt` 互补**：图像识别默认优先本地 `vlm_*`，要走 SCULPT 格式再调这个 | ✅ 需要 |
 | `vlm_describe` | 本地看图理解：描述主体与色调 | 免登录，本地跑 |
 | `vlm_ask` | 对图片任意提问 | 免登录，本地跑 |
 | `vlm_cover_check` | 音乐封面语义质检（`batch=true` 递归目录） | 免登录，本地跑 |
@@ -123,7 +127,7 @@ pnpm install && pnpm build     # 产物在 dist/，package.json 的 bin 指向�
 ## 验证
 
 ```bash
-node test-mcp.mjs      # 起 server 跑 initialize + tools/list，应输出 TOOLS_LIST_OK count = 17
+node test-mcp.mjs      # 起 server 跑 initialize + tools/list，应输出 TOOLS_LIST_OK count = 21
 ```
 
 ## 说明

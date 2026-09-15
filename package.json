@@ -1,7 +1,7 @@
 {
   "name": "museav-mcp",
-  "version": "1.1.0",
-  "description": "MCP server — 把 museav-cli（MUSE AV 出图中台）的能力暴露给 AI Agent：出图、抠图、超分放大、去水印、压缩、模板/技能/工作流清单、素材上传、图生模板、SkillHub 发布，外加 mlx-vlm-kit 本地看图理解",
+  "version": "1.2.0",
+  "description": "MCP server — 把 museav-cli（MUSE AV 出图中台）的能力暴露给 AI Agent：出图、抠图、超分放大、去水印、压缩、模板/技能/工作流/视频模板清单、模型与余额查询、素材上传、图生模板、SCULPT 反推、SkillHub 发布，外加 mlx-vlm-kit 本地看图理解（21 个工具，museav-cli ≥ 3.4.0）",
   "type": "module",
   "bin": {
     "museav-mcp": "dist/index.js"

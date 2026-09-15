@@ -8,7 +8,7 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 
-const EXPECTED_TOOL_COUNT = 17;
+const EXPECTED_TOOL_COUNT = 21;
 
 const child = spawn("node", ["dist/index.js"], {
   cwd: dirname(fileURLToPath(import.meta.url)),

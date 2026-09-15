@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.2.0 (2026-09-15)
+
+### 补上 CLI 3.4.0 的四个新工具，门槛提到 21 个
+
+`npx -y museav-mcp` 终于把 `museav` 升级后的命令也包进来。`speak` / `transcribe` 不在
+3.4.0（计划中），所以这一版只上这四个：
+
+| 工具 | 背后 | 取流 |
+| --- | --- | --- |
+| `reverse` | `museav reverse`（中台 API 反推 SCULPT prompt） | stdout = 一行英文 prompt；stderr = 结构化中文报告（SCULPT 六要素） |
+| `list_models` | `museav models [--video]` | stderr = 人类表格（label + 时长/分辨率），便于 agent 挑 |
+| `balance` | `museav balance` | stdout = 完整 JSON（balance_cny / markup_pct / checked_at），agent 解析更稳 |
+| `list_video_templates` | `museav video-templates [--category]` | stderr = 人类表格（id / 中文名 / 分类 / 比例 / 模型 / 字段 / 参考视频 / 归属） |
+
+### reverse 与 vlm_reverse_prompt 的分工
+
+按用户原则「图像识别优先走 mlx-vlm-kit」，新增 `reverse` 并不意味着以后默认用它。
+两个工具是**互补**而不是替代：
+
+- **`vlm_reverse_prompt`**（本地，Qwen3-VL-4B，mlx-vlm-kit）：通用 prompt 反推，免登录零成本，默认够用
+- **`reverse`**（中台 API）：平台专用 SCULPT 六要素格式，喂给 `gen_background` 更顺手
+
+`reverse` 的 description 里直接写了这个分工，agent 调它前应该先看 `vlm_reverse_prompt`
+够不够。
+
+### 兼容性
+
+工具只增不减；1.1.0 的所有 schema 保持可用。新增的 `reverse` 与已有的 `vlm_reverse_prompt` 没有参数冲突（一个吃本地图片路径/URL，一个只吃本地路径）。
+
 ## 1.1.0 (2026-09-15)
 
 ### 把 1.0.1 之后压在本地的东西发出去，并补齐包装层缺的参数
