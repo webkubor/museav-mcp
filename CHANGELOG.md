@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.0 (2026-09-16)
+
+### 移除 skillhub_* 三个工具（跟随 museav-cli 3.6.0）
+
+museav-cli 3.6.0 删掉了 `skillhub` 命令（发小红书 SkillHub，owner 一次没用过，
+且是该 CLI 唯一的第三方工具依赖）。本包这三个工具是它的透传层，必须同步删，
+否则 agent 调用会拿到 `unknown command`。
+
+- 移除 `skillhub_tags` / `skillhub_whoami` / `skillhub_publish`，以及只为它们
+  服务的 `skillhubLoggedIn()` 登录态探测。工具数 21 → 18。
+- 前置条件写清最低版本：`museav-cli >= 3.6.0`。
+
 ## 1.2.0 (2026-09-15)
 
 ### 补上 CLI 3.4.0 的四个新工具，门槛提到 21 个

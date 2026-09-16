@@ -7,7 +7,7 @@
 
 传输方式 stdio。图片以**绝对路径**传入，处理结果写回磁盘并返回路径 —— 不走 base64，大图不炸上下文。
 
-## 工具（21 个）
+## 工具（18 个）
 
 | 工具 | 干什么 | 是否需要登录 |
 |---|---|---|
@@ -29,9 +29,6 @@
 | `vlm_ask` | 对图片任意提问 | 免登录，本地跑 |
 | `vlm_cover_check` | 音乐封面语义质检（`batch=true` 递归目录） | 免登录，本地跑 |
 | `vlm_reverse_prompt` | 反推出图 prompt，喂回 `gen_background` | 免登录，本地跑 |
-| `skillhub_tags` | 查小红书 SkillHub 内容标签（实时拉，别硬编码） | 免登录 |
-| `skillhub_whoami` | 查 SkillHub 登录态 | 免登录 |
-| `skillhub_publish` | 发布本地 Skill 到小红书 SkillHub，**默认 dry-run** | 真提交才需要 |
 
 本地后期那四个和 `vlm_*` 那四个不联网、不消耗中台额度。
 
@@ -44,21 +41,12 @@
 模板自带哪些占位符看清单里「字段:」那一列，取值用 `gen_background` 的 `fields` 传
 （JSON 对象字符串）。
 
-### `skillhub_publish` 的两条硬规矩
-
-1. **默认只预演**：不带 `submit=true` 就只做本地打包 + 校验，不上传不提交，把待提交内容
-   返回给人核对。只有用户明确说「提交 / 确认 / submit」才带 `submit=true`——
-   提交不可逆，Skill ID 是平台主键、跨版本不可改名。
-2. **真提交前必须已登录**：未登录时底层 CLI 会打印二维码**并阻塞等扫码**，而 MCP 走
-   `execFile`，要等进程结束才拿到输出——二维码根本传不到人眼前，就是死锁。所以这里
-   直接报错，引导用户去自己终端跑一次 `museav skillhub login`。
-
 ## 前置条件
 
 这个 MCP 只是包装层，真活是两条命令干的：
 
 ```bash
-npm i -g museav-cli      # 出图 / 后期 / 素材 / SkillHub（skillhub_* 需要 >= 3.1.0）
+npm i -g museav-cli      # 出图 / 后期 / 素材（需要 >= 3.6.0）
 pipx install git+https://github.com/webkubor/mlx-vlm-kit.git   # vlm_* 四个工具需要
 ```
 
