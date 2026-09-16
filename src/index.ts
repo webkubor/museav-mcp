@@ -29,6 +29,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { execFile } from "node:child_process";
+import { semverLt } from "./semver.js";
 import { promisify } from "node:util";
 import { existsSync, statSync } from "node:fs";
 
@@ -39,6 +40,50 @@ function resolveMuseavBin(): string {
   const env = process.env.MUSEAV_BIN;
   if (env && existsSync(env)) return env;
   return "museav"; // 依赖全局安装的 museav 命令
+}
+
+/**
+ * 本 MCP 自己零实现，全靠外部两个二进制干活 —— 代价是对它们的版本完全不设防：
+ * 旧版缺某个命令时，agent 拿到的是 `unknown command`，而不是「请升级」。
+ *
+ * 2026-09-16 真咬过一次：owner 机器上全局 museav 卡在 3.4.0，新发的 3.5.0
+ * 根本没生效，而 MCP 一声不吭照常跑。所以加这道。
+ *
+ * 只在**首次真要用**时探一次并缓存；失败不缓存 —— 用户装好/升好之后，
+ * 下一次调用就能通过，不必重启整个 MCP server。
+ */
+const MIN_MUSEAV = "3.6.0";
+let museavOk: Promise<void> | null = null;
+
+
+async function ensureMuseav(): Promise<void> {
+  if (museavOk) return museavOk;
+  const probe = (async () => {
+    const bin = resolveMuseavBin();
+    let raw: string;
+    try {
+      raw = (await execFileAsync(bin, ["--version"], { timeout: 15_000 })).stdout;
+    } catch {
+      throw new Error(
+        `找不到 museav 命令。装： npm i -g museav-cli@latest` +
+          `（或用环境变量 MUSEAV_BIN 指到具体路径）`,
+      );
+    }
+    const v = raw.match(/\d+\.\d+\.\d+/)?.[0];
+    if (v && semverLt(v, MIN_MUSEAV)) {
+      throw new Error(
+        `museav-cli 版本过旧：当前 ${v}，本 MCP 需要 >= ${MIN_MUSEAV}。` +
+          `升级： npm i -g museav-cli@latest`,
+      );
+    }
+  })();
+  museavOk = probe;
+  try {
+    await probe;
+  } catch (e) {
+    museavOk = null;   // 失败不缓存：装好之后下一次调用就能过
+    throw e;
+  }
 }
 
 function requireFile(p: string | undefined, label: string): string {
@@ -78,6 +123,7 @@ async function runMuseav(
   maxChars = 2000,
   mode: OutMode = "stdout",
 ): Promise<string> {
+  await ensureMuseav();
   const bin = resolveMuseavBin();
   try {
     const { stdout, stderr } = await execFileAsync(bin, args, {
@@ -366,7 +412,7 @@ server.tool(
     "本工具给出平台专用 SCULPT 格式，喂给 gen_background 更顺手。",
   {
     input: z.string().describe("本地图片绝对路径，或图片 URL"),
-    local: z.boolean().optional().describe("强制走本地 Ollama qwen3-vl（需自备 Ollama + 模型；与「图像识别优先 mlx-vlm-kit」原则相悖，留着只是因为偶尔要离线）"),
+    local: z.boolean().optional().describe("改走本地 vlm（mlx-vlm-kit）读图，仍产出 SCULPT 六要素结构 —— 免登录零成本。museav-cli 3.5.0 起本地引擎已从 Ollama 换成 mlx-vlm-kit；vlm 没装时 CLI 自动回落中台 API"),
   },
   async (params) => {
     const isUrl = /^https?:\/\//i.test(params.input);
@@ -443,6 +489,13 @@ async function runVlm(args: string[], timeout = 300_000): Promise<string> {
     const { stdout } = await execFileAsync(bin, args, { timeout });
     return stdout.trim().slice(0, 3000);
   } catch (err: any) {
+    if (err?.code === "ENOENT") {
+      throw new Error(
+        `找不到 vlm 命令（本地看图靠它）。装： ` +
+          `pipx install git+https://github.com/webkubor/mlx-vlm-kit.git` +
+          `（或用环境变量 MLX_VLM_BIN 指到具体路径）`,
+      );
+    }
     const detail = err?.stderr?.trim() || err?.message || String(err);
     throw new Error(`vlm ${args[0]} 执行失败: ${detail}`.slice(0, 2000));
   }
