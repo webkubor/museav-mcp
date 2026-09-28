@@ -1,14 +1,14 @@
 // 简单 MCP 协议测试客户端：spawn server，写入 initialize/tools/list，读取响应
 //
-// 工具数是个约定值：README / docs 都写着「TOOLS_LIST_OK count = 17」，
+// 工具数是个约定值：README / docs 都写着工具数量，
 // 这个断言就是让「加了工具忘了改文档」在 CI 里变红，而不是等人去发现。
 // 新增工具时把这个数一起改（只增不减，删工具是破坏性变更，得走大版本）。
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 
-const EXPECTED_TOOL_COUNT = 18;
+const EXPECTED_TOOL_COUNT = 21;   // 2026-09-28 接回 skillhub_* 三个（18 → 21）
 
 // 版本守卫的语义比较必须按数字逐段比。字符串比的话 "3.10.0" < "3.6.0"，
 // 真出到 3.10 时会把新版本判成过旧、把所有工具锁死 —— 而那时离现在还很远，

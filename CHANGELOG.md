@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.1.0 (2026-09-28)
+
+### 接回 skillhub_* 三个工具：CLI 回来了，MCP 不该留着缺口
+
+1.3.0 移除这三个工具的理由是「CLI 自己都没这个命令了」——那时 museav-cli 3.6.0
+刚好移除了 `skillhub`。**2026-09-28 CLI 以 3.9.0 恢复了这个命令**（它是 MUSE AV
+唯一的出站通道：装一个 CLI 既能出图又能把做好的 Skill 发到小红书），MCP 却还停在
+「没有这条能力」。
+
+缺口留着是有代价的：文档写着、用户以为装个 MCP 就能发 Skill，实际不行。
+
+- `skillhub_tags` / `skillhub_whoami` / `skillhub_publish` 接回，工具数 18 → 21
+- `MIN_MUSEAV` 3.6.0 → **3.9.0**（`skillhub` 是 3.9.0 才有的，用 3.6.0 当门槛
+  等于放行一个会报 unknown command 的旧版 CLI）
+- `skillhub_publish` 的工具说明里写进**平台资产护栏**：Skill 正文抄了 MUSE AV
+  平台公共模板的提示词会被 CLI 拒绝；只引用模板 slug 放行。不写这条，Agent 遇到
+  拒绝时只会看到一句「预演失败」，不知道为什么
+
+`requireSkillPath` 这个 helper 从 1.3.0 起就一直没人用（工具被删了它被留下了），
+这次接回工具正好用上，不用再删。
+
 ## 2.0.0 (2026-09-16)
 
 ### 加版本守卫：底层二进制太旧时直接说「请升级」，不再让 agent 撞 unknown command

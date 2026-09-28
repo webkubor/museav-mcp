@@ -7,7 +7,7 @@
 
 传输方式 stdio。图片以**绝对路径**传入，处理结果写回磁盘并返回路径 —— 不走 base64，大图不炸上下文。
 
-## 工具（18 个）
+## 工具（21 个）
 
 | 工具 | 干什么 | 是否需要登录 |
 |---|---|---|
@@ -29,8 +29,25 @@
 | `vlm_ask` | 对图片任意提问 | 免登录，本地跑 |
 | `vlm_cover_check` | 音乐封面语义质检（`batch=true` 递归目录） | 免登录，本地跑 |
 | `vlm_reverse_prompt` | 反推出图 prompt，喂回 `gen_background` | 免登录，本地跑 |
+| `skillhub_tags` | 查小红书 SkillHub 内容标签（发布必带，别硬编码） | ✅ 需要 |
+| `skillhub_whoami` | 查 SkillHub 登录态（脱敏） | ✅ 需要 |
+| `skillhub_publish` | 把本地 Agent Skill 发到小红书 SkillHub。**默认 dry-run**，`submit=true` 才真提交 | ✅ 需要 |
 
 本地后期那四个和 `vlm_*` 那四个不联网、不消耗中台额度。
+
+### 发 Skill 之前必读
+
+`skillhub_publish` **默认只预演**（本地打包校验，不上传不提交），把待提交内容返回给你核对。
+只有用户明确说「提交 / 确认 / submit」才带 `submit=true` —— 提交不可逆，Skill ID 是
+平台主键、跨版本不可改名。
+
+真提交前会先查登录态。**未登录时 MCP 不会挂在那儿等你**：二维码要等进程结束才能
+返回给用户，硬等就是死锁，所以会直接报错，让你引导用户去终端跑一次
+`museav skillhub login` 扫码。
+
+CLI 自带**平台资产护栏**：Skill 正文里抄了 MUSE AV 平台公共模板的提示词会被拒绝发布，
+只引用模板 slug（`museav gen --template xxx`）则放行——搬运是重新分发资产，引用是正常集成。
+被拒时按提示把正文换成调用方式。
 
 ### 两个「先查再调」
 
@@ -46,7 +63,7 @@
 这个 MCP 只是包装层，真活是两条命令干的：
 
 ```bash
-npm i -g museav-cli      # 出图 / 后期 / 素材（需要 >= 3.6.0）
+npm i -g museav-cli      # 出图 / 后期 / 素材 / SkillHub 发布（需要 >= 3.9.0）
 pipx install git+https://github.com/webkubor/mlx-vlm-kit.git   # vlm_* 四个工具需要
 ```
 
