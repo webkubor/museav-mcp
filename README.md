@@ -1,9 +1,32 @@
-# museav-mcp
+<h1 align="center">🎨 museav-mcp</h1>
 
-把 [museav-cli](https://github.com/webkubor/museav-cli)（MUSE AV 出图中台命令行工具）与
-[mlx-vlm-kit](https://github.com/webkubor/mlx-vlm-kit)（Mac 本地看图理解）的能力包装成
-**MCP server**，让 Claude Code / DSH / WorkBuddy / 任意支持 MCP 的 AI Agent 直接调用出图、
-图片后期、素材查询与看图理解。
+<p align="center">
+  <strong>一个 MCP server，把出图、看图、素材库全套能力接进任意 AI Agent。</strong><br>
+  MUSE AV 出图中台命令行工具 + Mac 本地看图理解，包装成 21 个工具 —— Claude Code / DSH / WorkBuddy / 任意支持 MCP 的 Agent 直接调用。
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/museav-mcp"><img src="https://img.shields.io/npm/v/museav-mcp?style=for-the-badge&color=3fb950&logo=npm&label=npm" alt="npm" /></a>
+  <a href="https://www.npmjs.com/package/museav-mcp"><img src="https://img.shields.io/npm/dm/museav-mcp?style=for-the-badge&color=6d7f9c&label=downloads" alt="downloads" /></a>
+  <img src="https://img.shields.io/badge/runtime_deps-2-5A9E6F?style=for-the-badge" alt="deps" />
+  <img src="https://img.shields.io/badge/license-MIT-777?style=for-the-badge" alt="MIT" />
+  <img src="https://img.shields.io/badge/transport-stdio-4d6bfe?style=for-the-badge" alt="stdio" />
+</p>
+
+<p align="center">
+  <a href="README.en.md">English</a> · <a href="CHANGELOG.md">更新日志</a>
+</p>
+
+---
+
+## 🎯 为什么用它，而不是别的
+
+| 需求 | 裸调 CLI | 自己接 SDK | museav-mcp |
+|---|:---:|:---:|:---:|
+| Claude Code 里出图 | ❌ 得自己拼命令 | ❌ 得自己接协议 | ✅ 一次调用 |
+| 21 个工具统一发现 | ❌ 逐个记 | ❌ 逐个注册 | ✅ MCP 自动列举 |
+| 大图不进上下文 | ❌ 要手动处理 | ❌ 自己写 base64 逻辑 | ✅ 走绝对路径 |
+| 换 Agent 就失效 | ❌ 命令行绑定 | ⚠️ 各家 SDK 不同 | ✅ 换谁都认 MCP |
 
 传输方式 stdio。图片以**绝对路径**传入，处理结果写回磁盘并返回路径 —— 不走 base64，大图不炸上下文。
 
