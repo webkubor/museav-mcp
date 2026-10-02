@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/museav-mcp"><img src="https://img.shields.io/npm/v/museav-mcp?style=for-the-badge&color=3fb950&logo=npm&label=npm" alt="npm" /></a>
   <a href="https://www.npmjs.com/package/museav-mcp"><img src="https://img.shields.io/npm/dm/museav-mcp?style=for-the-badge&color=6d7f9c&label=downloads" alt="downloads" /></a>
-  <img src="https://img.shields.io/badge/tools-27-4d6bfe?style=for-the-badge" alt="tools" />
+  <img src="https://img.shields.io/badge/tools-30-4d6bfe?style=for-the-badge" alt="tools" />
   <img src="https://img.shields.io/badge/runtime_deps-2-5A9E6F?style=for-the-badge" alt="deps" />
   <img src="https://img.shields.io/badge/license-MIT-777?style=for-the-badge" alt="MIT" />
   <img src="https://img.shields.io/badge/transport-stdio-8957e5?style=for-the-badge" alt="stdio" />
@@ -45,6 +45,7 @@ CLI 的一次薄封装。所以 CLI 一升级，MCP 这边立刻就有新能力�
 | `vlm` | [mlx-vlm-kit](https://github.com/webkubor/mlx-vlm-kit) | 4 | 本地离线看图：描述、任意提问、封面质检、反推出图 prompt | `vlm`（Apple Silicon） |
 | `contrast` | [contrast-guard](https://github.com/webkubor/contrast-guard) | 3 | 对比度门禁：静态查色值达不达标、渲染后量实际字号灰阶、存基线与基线对比 | `contrast-guard` |
 | `facet` | [@webkubor/facet](https://github.com/webkubor/facet) | 2 | Markdown 排版成 PDF / 长图 / 讲稿页（自带多套模板） | `facet` |
+| `reel` | [@kubor/reel-kit](https://github.com/webkubor/reel-kit) | 3 | 素材 + 逐句文案 → 竖版成片（模板 / 转场 / 配乐 / 可选配音） | `reel` + **ffmpeg** |
 | — | 本 MCP 自带 | 1 | `groups_list`：列出全部分组、各自装什么、为什么没启用 | 无 |
 
 **默认策略是探测式**：某个分组的 CLI 在 `PATH` 上，它的工具才会注册。理由是工具 schema
@@ -69,7 +70,7 @@ claude mcp add museav -- npx -y museav-mcp
 
 然后在 Agent 里说「用 museav 出一张图」，或者先问一句「这个 MCP 有哪些能力分组」。
 
-## 工具（27 个）
+## 工具（30 个）
 
 ### `museav` 组 —— MUSE AV 出图中台（17）
 
@@ -124,6 +125,20 @@ claude mcp add museav -- npx -y museav-mcp
 | `facet_templates` | 列可用排版模板名（`facet_build` 的 `template` 从这里取） |
 | `facet_build` | 把 Markdown 排成 PDF / 长图 / 讲稿页 |
 
+### `reel` 组 —— 竖版短视频合成（3）
+
+| 工具 | 干什么 |
+|---|---|
+| `reel_templates` | 列可用版式模板名（`reel_make` 的 `template` 从这里取） |
+| `reel_bgm` | 列配乐库：别名、时长、风格、授权 |
+| `reel_make` | 素材图 + 逐句文案 → mp4（模板 / 转场 / 配乐 / 标题 / 可选配音） |
+
+素材与文案**按顺序一一对应**，数量不等时取较少的一方并明确报出来，不会静默丢弃。
+不给 `voice` 时镜头时长由 `perShot` 决定（不需要任何模型）；给了才走本地 Qwen3-TTS。
+**硬依赖系统里的 ffmpeg**（不在 npm 包里）。
+
+`museav` 出的是原料（图、无声片），`reel` 出的是能发的成品 —— 这两段是一条业务线的前后半截。
+
 ### 发 Skill 之前必读
 
 `skillhub_publish` **默认只预演**（本地打包校验，不上传不提交），把待提交内容返回给你核对。
@@ -156,6 +171,7 @@ npm i -g museav-cli        # museav 组：出图 / 后期 / 素材 / SkillHub（
 pipx install git+https://github.com/webkubor/mlx-vlm-kit.git   # vlm 组
 npm i -g contrast-guard    # contrast 组
 npm i -g @webkubor/facet   # facet 组
+npm i -g @kubor/reel-kit   # reel 组（另外要 brew install ffmpeg）
 ```
 
 装哪几个由你决定 —— 没装的组就是不会注册，不会报错。
@@ -231,7 +247,7 @@ pnpm install && pnpm build     # 产物在 dist/，package.json 的 bin 指向�
 | [lite-browser](https://github.com/webkubor/lite-browser) | 它**自己就有 MCP**（21 个工具）。聚合层应该**转发**而不是重包一遍 —— 转发机制还没做，做了再接 |
 | [scorecard](https://github.com/webkubor/scorecard) | 仓库里有 CLI，但 npm 上的 `scorecard` 被一个**无关的旧包**占着（tarball 里只有一个 `index.js`）。`npm i -g scorecard` 装不到它 —— 得先改名或加 scope 发布 |
 | [kyvault](https://github.com/webkubor/kyvault) | **密钥库**，`get` 会打印明文。这类能力不进公开 MCP，是红线 |
-| [voxflow](https://github.com/webkubor/voxflow) / [reel-kit](https://github.com/webkubor/reel-kit) | 工具面很清晰，但环境门槛高（本地 TTS 模型约 2.9GB / ffmpeg），适合单独一组慢慢加 |
+| [voxflow](https://github.com/webkubor/voxflow) | 工具面很清晰，但环境门槛高（本地 TTS 模型约 2.9GB），适合单独一组慢慢加 |
 | [trend-radar](https://github.com/webkubor/trend-radar) / [path-guard](https://github.com/webkubor/path-guard) / [tombstone-reaper](https://github.com/webkubor/tombstone-reaper-skill) | 能力好，但**没有可安装的 CLI**：前两个仓库还没开源 / 没发布，最后一个只有仓内脚本 |
 | `im-notify-kit` / `ai-sse-kit` / `talk-skills` 等 | 纯库或纯提示词，没有命令行工具面 —— 要进得先给它们写一个 CLI |
 
@@ -243,7 +259,7 @@ MCP 侧不写任何业务逻辑。
 
 ```bash
 node test-mcp.mjs      # 起 server 跑 initialize + tools/list
-                       # 断言：27 个工具、21 个老工具名一个不少、分组开关逻辑
+                       # 断言：30 个工具、21 个老工具名一个不少、分组开关逻辑
 ```
 
 `MUSEAV_MCP_GROUPS=all` 是测试用的启动方式 —— CI 机器上什么 CLI 都没装，

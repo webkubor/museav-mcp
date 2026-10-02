@@ -11,14 +11,18 @@ owner 口径：**能力归 CLI，MCP 只做串联层。** 这个 MCP 从此是 C
 **名字和 21 个工具名一个字没动** —— 老用户的 agent 正靠它们干活。`test-mcp.mjs` 现在把
 这 21 个名字逐个钉死，掉了就 CI 变红。
 
-新增两个分组（都是已发 npm、零账号、陌生人装完就能用）：
+新增三个分组（都是已发 npm、零账号、陌生人装完就能用）：
 
 - `contrast`（[contrast-guard](https://github.com/webkubor/contrast-guard)）3 个工具：
   静态查色值、生成配置、渲染后计量与基线对比
 - `facet`（[@webkubor/facet](https://github.com/webkubor/facet)）2 个工具：
   列排版模板、把 Markdown 排成 PDF / 长图 / 讲稿页
+- `reel`（[@kubor/reel-kit](https://github.com/webkubor/reel-kit)）3 个工具：
+  列版式模板、列配乐库、素材 + 逐句文案合成竖版成片（mp4）。
+  **硬依赖系统里的 ffmpeg**（不在 npm 包里）。museav 出原料，它出能发的成品 ——
+  这两段是一条业务线的前后半截，接上这条线在 MCP 里才闭环
 
-工具数 21 → **27**（museav 17 + vlm 4 + contrast 3 + facet 2 + `groups_list`）。
+工具数 21 → **30**（museav 17 + vlm 4 + contrast 3 + facet 2 + reel 3 + `groups_list`）。
 
 #### 行为变化：默认策略改成「探测式」
 

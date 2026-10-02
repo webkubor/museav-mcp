@@ -19,6 +19,7 @@
  * | vlm      | mlx-vlm-kit     | 本地离线看图（Apple Silicon） |
  * | contrast | contrast-guard  | 对比度门禁：静态检查 + 渲染后计量 |
  * | facet    | @webkubor/facet | Markdown 排版成 PDF / 长图 / 讲稿页 |
+ * | reel     | @kubor/reel-kit | 素材 + 逐句文案 → 竖版成片（需要 ffmpeg） |
  *
  * 默认**装了哪个 CLI 就启用哪个分组**（工具 schema 会随每次请求发出去，
  * 不该让用户为没装的东西付 token）。用 MUSEAV_MCP_GROUPS 强开或裁剪；

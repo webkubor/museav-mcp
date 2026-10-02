@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/museav-mcp"><img src="https://img.shields.io/npm/v/museav-mcp?style=for-the-badge&color=3fb950&logo=npm&label=npm" alt="npm" /></a>
   <a href="https://www.npmjs.com/package/museav-mcp"><img src="https://img.shields.io/npm/dm/museav-mcp?style=for-the-badge&color=6d7f9c&label=downloads" alt="downloads" /></a>
-  <img src="https://img.shields.io/badge/tools-27-4d6bfe?style=for-the-badge" alt="tools" />
+  <img src="https://img.shields.io/badge/tools-30-4d6bfe?style=for-the-badge" alt="tools" />
   <img src="https://img.shields.io/badge/runtime_deps-2-5A9E6F?style=for-the-badge" alt="deps" />
   <img src="https://img.shields.io/badge/license-MIT-777?style=for-the-badge" alt="MIT" />
   <img src="https://img.shields.io/badge/transport-stdio-8957e5?style=for-the-badge" alt="stdio" />
@@ -46,6 +46,7 @@ returned as paths — no base64.
 | `vlm` | [mlx-vlm-kit](https://github.com/webkubor/mlx-vlm-kit) | 4 | Local offline vision: describe, ask, cover-check, reverse-prompt | `vlm` (Apple Silicon) |
 | `contrast` | [contrast-guard](https://github.com/webkubor/contrast-guard) | 3 | Contrast gating: static colour-pair check, rendered measurement, baselines | `contrast-guard` |
 | `facet` | [@webkubor/facet](https://github.com/webkubor/facet) | 2 | Typeset Markdown into PDF / long image / slide deck | `facet` |
+| `reel` | [@kubor/reel-kit](https://github.com/webkubor/reel-kit) | 3 | Assets + per-line copy → vertical video (templates / transitions / BGM / optional voice-over) | `reel` + **ffmpeg** |
 | — | built into this MCP | 1 | `groups_list`: every group, what to install, why one is off | none |
 
 **The default strategy is probing**: a group's tools are registered only if its CLI is on `PATH`.
@@ -68,7 +69,7 @@ npm i -g museav-cli                    # install whichever CLI you want a group 
 claude mcp add museav -- npx -y museav-mcp
 ```
 
-## Tools (27)
+## Tools (30)
 
 ### `museav` group — MUSE AV generation backend (17)
 
@@ -107,6 +108,18 @@ claude mcp add museav -- npx -y museav-mcp
 
 `facet_templates` (list template names), `facet_build` (Markdown → PDF / long image / slides).
 
+### `reel` group — vertical video assembly (3)
+
+`reel_templates` (list layout templates), `reel_bgm` (BGM library: alias, duration, licence),
+`reel_make` (assets + per-line copy → mp4).
+
+Assets and copy are matched **in order**; when the counts differ the smaller side wins and the extra
+items are reported explicitly — never silently dropped. Without `voice`, shot length comes from `perShot`
+(no models needed); with it, a local Qwen3-TTS is used. **Requires ffmpeg on the system.**
+
+`museav` produces the raw material (stills, silent clips); `reel` produces the publishable cut —
+two halves of one pipeline.
+
 ## Prerequisites
 
 ```bash
@@ -114,6 +127,7 @@ npm i -g museav-cli        # museav group: generation / post-processing / assets
 pipx install git+https://github.com/webkubor/mlx-vlm-kit.git   # vlm group
 npm i -g contrast-guard    # contrast group
 npm i -g @webkubor/facet   # facet group
+npm i -g @kubor/reel-kit   # reel group (plus: brew install ffmpeg)
 ```
 
 Install only what you need — an uninstalled group simply isn't registered, and nothing errors.
@@ -137,7 +151,7 @@ snippets, including how to pass `MUSEAV_MCP_GROUPS` through `env`.
 | [lite-browser](https://github.com/webkubor/lite-browser) | It **already ships its own MCP** (21 tools). An aggregator should *forward* it, not re-wrap it — forwarding isn't built yet |
 | [scorecard](https://github.com/webkubor/scorecard) | The repo has a CLI, but the `scorecard` npm name is held by an **unrelated stale package** — `npm i -g scorecard` doesn't install it |
 | [kyvault](https://github.com/webkubor/kyvault) | A **secret store**; `get` prints plaintext. That class of capability never belongs in a public MCP |
-| [voxflow](https://github.com/webkubor/voxflow) / [reel-kit](https://github.com/webkubor/reel-kit) | Clear tool surface, heavy environment (local TTS models ~2.9GB / ffmpeg) — better as their own group later |
+| [voxflow](https://github.com/webkubor/voxflow) | Clear tool surface, heavy environment (local TTS models ~2.9GB) — better as its own group later |
 | [trend-radar](https://github.com/webkubor/trend-radar) / [path-guard](https://github.com/webkubor/path-guard) / [tombstone-reaper](https://github.com/webkubor/tombstone-reaper-skill) | Good capability, but **no installable CLI** yet |
 
 **Adding a group** takes three steps: make sure the project's CLI is installable, add a `CliSpec` in

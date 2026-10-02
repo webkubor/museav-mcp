@@ -51,3 +51,20 @@ export const FACET_CLI: CliSpec = {
   timeoutMs: 300_000,
   maxChars: 4000,
 };
+
+/**
+ * 竖版短视频合成（素材 + 逐句文案 → mp4）。
+ *
+ * 超时给到 15 分钟：它是真在渲染帧 + 调 ffmpeg 合成，1080×1920 几十秒的片子
+ * 比出图慢得多；而「慢」和「卡死」在 agent 那边长得一模一样，所以宁可给宽。
+ * 另外它**硬依赖 ffmpeg**（不在 npm 包里），装法见 install 提示的第二句。
+ */
+export const REEL_CLI: CliSpec = {
+  name: "@kubor/reel-kit",
+  envVar: "REEL_BIN",
+  command: "reel",
+  purpose: "竖版短视频合成靠它，且需要系统里有 ffmpeg",
+  install: "npm i -g @kubor/reel-kit@latest（另外需要 ffmpeg：brew install ffmpeg）",
+  timeoutMs: 900_000,
+  maxChars: 4000,
+};
