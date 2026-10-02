@@ -86,3 +86,23 @@ export function detectChangedRuntime(prevRoot, curRoot, curFiles) {
   }
   return changed
 }
+
+/**
+ * 取 `npm pack --json` 的那一条结果 —— 两种 npm 大版本形状都认。
+ *
+ * **npm 11 → 12 的破坏性变更**：11 回数组 `[{ files: [...] }]`，
+ * 12 回以包名为键的对象 `{ "<name>": { files: [...] } }`。
+ * 原先写死 `JSON.parse(out)[0].files`，在 npm 12 上 `[0]` 是 undefined，
+ * 报出来的是 `Cannot read properties of undefined (reading 'files')`
+ * —— 从这句话完全看不出跟 npm 版本有任何关系。
+ *
+ * 2026-10-02 真咬到一次：各仓的 publish workflow 里写着 `npm install -g npm@latest`，
+ * 于是 npm 12 一发版，**所有仓的 CI 发版同时挂掉**，而本地（还是 npm 11）
+ * 怎么跑都是绿的 —— 「门禁在本地绿」和「门禁会跑」是两件事的又一个实例。
+ *
+ * 抽进 lib 是为了能测（门禁脚本顶层会跑 pack/连 registry，import 不进来），
+ * 理由同本文件开头。两种形状都认，是为了不再被「上游默认装最新」一击必杀。
+ */
+export function packEntry(parsed) {
+  return Array.isArray(parsed) ? parsed[0] : Object.values(parsed)[0]
+}
