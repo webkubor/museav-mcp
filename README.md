@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/museav-mcp"><img src="https://img.shields.io/npm/v/museav-mcp?style=for-the-badge&color=3fb950&logo=npm&label=npm" alt="npm" /></a>
   <a href="https://www.npmjs.com/package/museav-mcp"><img src="https://img.shields.io/npm/dm/museav-mcp?style=for-the-badge&color=6d7f9c&label=downloads" alt="downloads" /></a>
-  <img src="https://img.shields.io/badge/tools-30-4d6bfe?style=for-the-badge" alt="tools" />
+  <img src="https://img.shields.io/badge/tools-43-4d6bfe?style=for-the-badge" alt="tools" />
   <img src="https://img.shields.io/badge/runtime_deps-2-5A9E6F?style=for-the-badge" alt="deps" />
   <img src="https://img.shields.io/badge/license-MIT-777?style=for-the-badge" alt="MIT" />
   <img src="https://img.shields.io/badge/transport-stdio-8957e5?style=for-the-badge" alt="stdio" />
@@ -46,6 +46,7 @@ CLI 的一次薄封装。所以 CLI 一升级，MCP 这边立刻就有新能力�
 | `contrast` | [contrast-guard](https://github.com/webkubor/contrast-guard) | 3 | 对比度门禁：静态查色值达不达标、渲染后量实际字号灰阶、存基线与基线对比 | `contrast-guard` |
 | `facet` | [@webkubor/facet](https://github.com/webkubor/facet) | 2 | Markdown 排版成 PDF / 长图 / 讲稿页（自带多套模板） | `facet` |
 | `reel` | [@kubor/reel-kit](https://github.com/webkubor/reel-kit) | 3 | 素材 + 逐句文案 → 竖版成片（模板 / 转场 / 配乐 / 可选配音） | `reel` + **ffmpeg** |
+| `browser` | [lite-browser](https://github.com/webkubor/lite-browser) | 13 | 真实 Chrome：打开/快照/点击/输入/截图/执行 JS + **人类交接协议** + 多 agent 会话隔离 | `lite-browser` |
 | — | 本 MCP 自带 | 1 | `groups_list`：列出全部分组、各自装什么、为什么没启用 | 无 |
 
 **默认策略是探测式**：某个分组的 CLI 在 `PATH` 上，它的工具才会注册。理由是工具 schema
@@ -70,7 +71,7 @@ claude mcp add museav -- npx -y museav-mcp
 
 然后在 Agent 里说「用 museav 出一张图」，或者先问一句「这个 MCP 有哪些能力分组」。
 
-## 工具（30 个）
+## 工具（43 个）
 
 ### `museav` 组 —— MUSE AV 出图中台（17）
 
@@ -139,6 +140,31 @@ claude mcp add museav -- npx -y museav-mcp
 
 `museav` 出的是原料（图、无声片），`reel` 出的是能发的成品 —— 这两段是一条业务线的前后半截。
 
+### `browser` 组 —— 浏览器操控（13）
+
+| 工具 | 干什么 |
+|---|---|
+| `browser_open` / `browser_close` | 打开网页建立会话 / 用完关闭（`reuse=true` 免扫码复用已确认的登录态） |
+| `browser_snapshot` | 提取可交互元素并编号（`@1`、`@2`…）—— click / type 传编号比 CSS 选择器稳 |
+| `browser_click` / `browser_type` / `browser_press` / `browser_scroll` | 点击 / 输入 / 按键 / 滚动 |
+| `browser_screenshot` | 截图当前视口，返回路径 |
+| `browser_eval` | 在页面里执行 JS —— **读正文/结构化数据只能靠它**（snapshot 只给可交互元素） |
+| `browser_status` | **唯一状态真源**：相位、在等谁、下一步做什么 |
+| `browser_await_human` / `browser_resume` | 人类交接协议：阻塞等人登录 → 人完成后恢复 |
+| `browser_sessions` | 列出所有 agent 的会话（排查「浏览器被谁占着」） |
+
+**人类交接协议**是这个组的核心价值：撞到登录墙不是死路，而是一条有契约的路径 ——
+`status` 看它在等什么 → `await_human` 阻塞等人（退出码 3/4 是**状态**不是故障，
+工具会原样把「需要人类介入 / 等待超时」交回来）→ `resume` 继续。
+
+**身份隔离**：lite-browser 的会话按 agent 隔离，而默认身份是 `default`。本 MCP 每次都
+显式传自己的身份（默认 `mcp`，可用 `MUSEAV_MCP_BROWSER_AGENT` 改），**不会跟别的 agent
+抢会话**——这是实测踩出来的（第一次没传，直接开在别人正在用的 default 会话上）。
+
+**刻意不暴露**（是判断，不是遗漏）：`exec -- <命令>`（把输入变成任意 shell 命令）、
+`cdp`（裸协议通道）、`cookie export` / `cookie pull-system`（导出/解密 Cookie = 直接交出凭据，
+与 kyvault 不进公开 MCP 同一条理由）。
+
 ### 发 Skill 之前必读
 
 `skillhub_publish` **默认只预演**（本地打包校验，不上传不提交），把待提交内容返回给你核对。
@@ -172,6 +198,7 @@ pipx install git+https://github.com/webkubor/mlx-vlm-kit.git   # vlm 组
 npm i -g contrast-guard    # contrast 组
 npm i -g @webkubor/facet   # facet 组
 npm i -g @kubor/reel-kit   # reel 组（另外要 brew install ffmpeg）
+curl -fsSL https://raw.githubusercontent.com/webkubor/lite-browser/main/install.sh | bash   # browser 组
 ```
 
 装哪几个由你决定 —— 没装的组就是不会注册，不会报错。
@@ -244,7 +271,6 @@ pnpm install && pnpm build     # 产物在 dist/，package.json 的 bin 指向�
 
 | 项目 | 为什么还没进 |
 |---|---|
-| [lite-browser](https://github.com/webkubor/lite-browser) | 它**自己就有 MCP**（21 个工具）。聚合层应该**转发**而不是重包一遍 —— 转发机制还没做，做了再接 |
 | [scorecard](https://github.com/webkubor/scorecard) | 仓库里有 CLI，但 npm 上的 `scorecard` 被一个**无关的旧包**占着（tarball 里只有一个 `index.js`）。`npm i -g scorecard` 装不到它 —— 得先改名或加 scope 发布 |
 | [kyvault](https://github.com/webkubor/kyvault) | **密钥库**，`get` 会打印明文。这类能力不进公开 MCP，是红线 |
 | [voxflow](https://github.com/webkubor/voxflow) | 工具面很清晰，但环境门槛高（本地 TTS 模型约 2.9GB），适合单独一组慢慢加 |

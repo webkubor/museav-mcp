@@ -16,7 +16,7 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 
-const EXPECTED_TOOL_COUNT = 30;   // 2026-10-02 分组化：museav 17 + vlm 4 + contrast 3 + facet 2 + reel 3 + groups_list
+const EXPECTED_TOOL_COUNT = 43;   // 2026-10-02 分组化：museav 17 + vlm 4 + contrast 3 + facet 2 + reel 3 + browser 13 + groups_list
 
 // 分组化之前就存在的 21 个工具 —— 这些名字是老用户的契约，不许消失
 const LEGACY_TOOLS = [

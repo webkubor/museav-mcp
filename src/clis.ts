@@ -68,3 +68,27 @@ export const REEL_CLI: CliSpec = {
   timeoutMs: 900_000,
   maxChars: 4000,
 };
+
+/**
+ * 浏览器操控（真实 Chrome + 登录态复用 + 人类交接协议）。
+ *
+ * 两处跟别的 CLI 不一样，都体现在这个 spec 里：
+ *  · **退出码是状态**：`3=需要人类介入`、`4=等待人类超时` —— 不是故障。
+ *  · **超时给到 15 分钟**：`await-human` 会阻塞着等人登录（默认等 300s，
+ *    可以传更长），比出图/出片都久。
+ *
+ * 它不在 npm 上（bun 编译出来的单文件二进制），装法只有 install.sh 一条。
+ */
+export const BROWSER_CLI: CliSpec = {
+  name: "lite-browser",
+  envVar: "LITE_BROWSER_BIN",
+  command: "lite-browser",
+  purpose: "浏览器操控靠它",
+  install: "curl -fsSL https://raw.githubusercontent.com/webkubor/lite-browser/main/install.sh | bash",
+  timeoutMs: 900_000,
+  maxChars: 6000,
+  stateExitCodes: {
+    3: "需要人类介入（登录 / 授权）—— 用 browser_status 看它在等什么，然后转告用户",
+    4: "等待人类超时 —— 人没在时限内完成；可以延长 timeout 再试一次",
+  },
+};

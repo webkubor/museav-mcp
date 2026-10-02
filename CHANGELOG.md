@@ -11,7 +11,7 @@ owner 口径：**能力归 CLI，MCP 只做串联层。** 这个 MCP 从此是 C
 **名字和 21 个工具名一个字没动** —— 老用户的 agent 正靠它们干活。`test-mcp.mjs` 现在把
 这 21 个名字逐个钉死，掉了就 CI 变红。
 
-新增三个分组（都是已发 npm、零账号、陌生人装完就能用）：
+新增四个分组（都是零账号、陌生人装完就能用）：
 
 - `contrast`（[contrast-guard](https://github.com/webkubor/contrast-guard)）3 个工具：
   静态查色值、生成配置、渲染后计量与基线对比
@@ -21,8 +21,25 @@ owner 口径：**能力归 CLI，MCP 只做串联层。** 这个 MCP 从此是 C
   列版式模板、列配乐库、素材 + 逐句文案合成竖版成片（mp4）。
   **硬依赖系统里的 ffmpeg**（不在 npm 包里）。museav 出原料，它出能发的成品 ——
   这两段是一条业务线的前后半截，接上这条线在 MCP 里才闭环
+- `browser`（[lite-browser](https://github.com/webkubor/lite-browser)）13 个工具：
+  真实 Chrome 的打开/快照/点击/输入/按键/滚动/截图/执行 JS，加上
+  **人类交接协议**（status → await-human → resume）与多 agent 会话隔离。
+  没有官方 CLI 的服务（小红书 / 微信 / X）只能这么接。
 
-工具数 21 → **30**（museav 17 + vlm 4 + contrast 3 + facet 2 + reel 3 + `groups_list`）。
+  两条设计判断写进了代码注释：
+  ① **包 CLI 而不是转发它自带的 MCP** —— 转发要给本 MCP 加一个
+     JSON-Schema→Zod 的运行时依赖，还要管子进程生命周期，而它的 CLI 本来就
+     覆盖同一批操作。按「能力归 CLI」的口径，包 CLI 才是对的那条路。
+  ② **退出码 3/4 是状态不是故障**（需要人类介入 / 等待超时）—— 为此给 CliSpec
+     加了 `stateExitCodes`：按码给不同的话，agent 才会去转告人类而不是重试。
+  ③ **永远显式传 `--agent`** —— 它的默认身份是 `default`，实测第一次没传就开在
+     别人正在用的会话上、把对方页面导航走了；MCP 现在用自己固定的身份（默认 `mcp`）。
+
+  **刻意不暴露**：`exec --`（任意 shell 命令）、`cdp`（裸协议）、
+  `cookie export` / `cookie pull-system`（导出/解密 Cookie = 交出凭据，
+  与 kyvault 不进公开 MCP 同一条理由）。
+
+工具数 21 → **43**（museav 17 + vlm 4 + contrast 3 + facet 2 + reel 3 + browser 13 + `groups_list`）。
 
 #### 行为变化：默认策略改成「探测式」
 

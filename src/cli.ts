@@ -60,6 +60,18 @@ export interface CliSpec {
    * （哪一对颜色、比值多少、建议改成什么）全被丢掉 —— 它只会以为工具坏了。
    */
   verdictExit?: boolean;
+  /**
+   * 退出码是**状态**而不是故障 —— 按码给不同的话，照样把输出交回给 agent。
+   *
+   * 比 `verdictExit` 细一档：那个是「所有非零都算判据」，这个是「只有这几个码
+   * 算状态，其余非零仍然是真失败」。
+   *
+   * 2026-10-02 为 lite-browser 加的：它的退出码契约是
+   * `0=正常 1=执行错误 2=参数错误 3=需要人类介入 4=等待人类超时` ——
+   * 3 和 4 恰恰是 agent 最需要看懂的两件事（「该叫人来了」/「人没来」），
+   * 当成调用失败处理，agent 只会以为工具坏了，然后重试，而正确动作是转告人类。
+   */
+  stateExitCodes?: Record<number, string>;
 }
 
 export interface RunOptions {
@@ -171,12 +183,22 @@ export function createRunner(spec: CliSpec): Runner {
       return raw.slice(0, cap) + cut;
     } catch (err: any) {
       if (err?.code === "ENOENT") throw missingError(spec);
+      const code = typeof err?.code === "number" ? err.code : null;
+      // 退出码是**状态**的（按码给不同的话）：agent 要据此决定下一步动作，不是重试
+      const state = code !== null ? spec.stateExitCodes?.[code] : undefined;
+      if (state) {
+        const raw = (err?.stdout?.trim() || err?.stderr?.trim() || "");
+        return (
+          (raw ? raw.slice(0, cap) : `${spec.command} 没有输出`) +
+          `\n（${spec.command} 退出码 ${code}：${state}）`
+        );
+      }
       // 退出码是判据的 CLI：把报告交回，别把结论当故障
       const isVerdict = opts?.verdictExit ?? spec.verdictExit ?? false;
-      if (isVerdict && typeof err?.code === "number") {
+      if (isVerdict && code !== null) {
         const raw = (err?.stdout?.trim() || err?.stderr?.trim() || "");
         const note =
-          `\n（${spec.command} 退出码 ${err.code}：这是它的判据，不是调用失败 —— ` +
+          `\n（${spec.command} 退出码 ${code}：这是它的判据，不是调用失败 —— ` +
           `按上面的报告决定怎么改）`;
         return (raw ? raw.slice(0, cap) : `${spec.command} 没有输出`) + note;
       }

@@ -28,6 +28,7 @@ import { vlmGroup } from "./groups/vlm.js";
 import { contrastGroup } from "./groups/contrast.js";
 import { facetGroup } from "./groups/facet.js";
 import { reelGroup } from "./groups/reel.js";
+import { browserGroup } from "./groups/browser.js";
 
 export interface CapabilityGroup {
   /** 分组 id，也是 MUSEAV_MCP_GROUPS 里的开关名 */
@@ -53,6 +54,7 @@ export const GROUPS: CapabilityGroup[] = [
   contrastGroup,
   facetGroup,
   reelGroup,
+  browserGroup,
 ];
 
 export const GROUPS_ENV = "MUSEAV_MCP_GROUPS";
