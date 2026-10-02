@@ -1,5 +1,61 @@
 # Changelog
 
+## 2.2.0 (2026-10-02)
+
+### 从「museav 的 MCP」变成 CS 系统的 MCP：能力分组化，开始串联整条工具链
+
+owner 口径：**能力归 CLI，MCP 只做串联层。** 这个 MCP 从此是 CS 系统（CortexOS）的 MCP ——
+把个人工具链上各开源项目的 CLI 能力，串成一张任意 agent 都能调用的网。要加能力，
+先加到那个项目的 CLI，再在这儿加一个分组；MCP 侧不写业务逻辑。
+
+**名字和 21 个工具名一个字没动** —— 老用户的 agent 正靠它们干活。`test-mcp.mjs` 现在把
+这 21 个名字逐个钉死，掉了就 CI 变红。
+
+新增两个分组（都是已发 npm、零账号、陌生人装完就能用）：
+
+- `contrast`（[contrast-guard](https://github.com/webkubor/contrast-guard)）3 个工具：
+  静态查色值、生成配置、渲染后计量与基线对比
+- `facet`（[@webkubor/facet](https://github.com/webkubor/facet)）2 个工具：
+  列排版模板、把 Markdown 排成 PDF / 长图 / 讲稿页
+
+工具数 21 → **27**（museav 17 + vlm 4 + contrast 3 + facet 2 + `groups_list`）。
+
+#### 行为变化：默认策略改成「探测式」
+
+某个分组的 CLI 在 `PATH` 上，它的工具才会注册。
+
+工具 schema 会随**每一次**模型请求发出去（原先 21 个工具约 3~4k token）。聚合 MCP 天然越串
+越多，不设开关，代价是每个用户每次请求都在为「他机器上根本没装的那些工具」付 token。
+
+装全了的用户感知不到区别；只装了 museav-cli 的用户，工具列表里少了 4 个 `vlm_*` ——
+那 4 个在没有 `vlm` 二进制的机器上本来也只会报错。没启用的分组不会消失：新增的
+`groups_list` 工具始终可用，它会说清这个 MCP 还能干什么、该装什么命令。
+
+想恢复「全列出来」，设 `MUSEAV_MCP_GROUPS=all`；裁剪用 `-museav` 这种写法。
+
+#### 两个实测踩到的坑（都写进注释了）
+
+1. **`contrast-guard` 用退出码当判据**：检查不达标时它把完整 JSON 报告打到 stdout，然后
+   `exit 1`。按「非零 = 调用失败」处理，agent 拿到的是「contrast-guard --json 执行失败」，
+   而哪一对颜色、比值多少、建议改成什么色值 —— 全丢。为此给 `CliSpec` 加了 `verdictExit`。
+2. **`facet` 没有 list 命令**，模板清单只能从它自己的报错里取；而 Node 打栈时会先打出错
+   那一行的**源码**，那行里也写着 `Available: ${templateNames.join(", ")}` —— 直接取第一个
+   匹配，拿到的「清单」是两段模板字面量垃圾。已按「滤掉含 `${` 的候选行 + 只认 kebab-case」
+   修掉，并保留「报错格式变了就把原话透出来，不编」。
+
+#### 其他
+
+- server 版本从 `package.json` 读（原先写死在代码里，包已发到 2.x 时 server 还自称 1.1.0）
+- 加了 MCP `instructions`：告诉 agent 先查 `groups_list` 再让用户装 CLI
+- 每个分组的 CLI 缺失/过旧报错都带**可照抄的安装命令**，并支持用环境变量指到绝对路径
+
+#### 还没进来的（不是忘了）
+
+`lite-browser` 自己就有 MCP，聚合层该**转发**而不是重包（转发机制还没做）；
+`scorecard` 的 npm 名被一个无关旧包占着，`npm i -g scorecard` 装不到它；
+`kyvault` 是密钥库、`get` 会打印明文，这类能力不进公开 MCP。
+完整清单与理由见 README 的「还没进来的项目」一节。
+
 ## 2.1.0 (2026-09-28)
 
 ### 接回 skillhub_* 三个工具：CLI 回来了，MCP 不该留着缺口
