@@ -13,36 +13,10 @@ import { z } from "zod";
 import { requireDir, requireFile } from "../util.js";
 import { createRunner } from "../cli.js";
 import { FACET_CLI } from "../clis.js";
+import { parseAvailableTemplates } from "../parse.js";
 import type { CapabilityGroup } from "../registry.js";
 
 const runFacet = createRunner(FACET_CLI);
-
-/**
- * facet 的 CLI 没有 list 命令，但模板名校验是它自己的真源：
- * 传一个不存在的模板，它会回 `Unknown template "x". Available: a, b, c`。
- *
- * 于是这里**拿它的报错当清单** —— 刻意不在 MCP 里抄一份模板名单：
- * 抄了就会漂移（facet 加模板时没人会记得改这边），而 agent 会照着
- * 过期名单编模板名，然后拿到一句它分不清是「拼错」还是「真没有」的报错。
- *
- * ⚠️ 2026-10-02 实测踩到的坑：Node 打栈时**先打出错那一行的源码**，而那行里
- * 也写着 `Available: ${templateNames.join(", ")}` —— 直接取第一个匹配，
- * 拿到的「清单」是 `${templateNames.join("` 和 `")}` 两段垃圾。
- * 所以要滤掉含 `${` 的候选行，并只认 kebab-case 的条目。
- */
-function parseAvailableTemplates(message: string): string[] | null {
-  const candidates = [...message.matchAll(/Available:\s*([^\n]+)/g)]
-    .map((m) => m[1])
-    .filter((line) => !line.includes("$") && !line.includes("{"));
-  for (const line of candidates) {
-    const names = line
-      .split(",")
-      .map((s) => s.trim())
-      .filter((s) => /^[a-z0-9][a-z0-9-]*$/.test(s));
-    if (names.length >= 2) return names;
-  }
-  return null;
-}
 
 export function registerFacet(server: McpServer): number {
   server.tool(

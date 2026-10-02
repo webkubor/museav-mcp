@@ -49,6 +49,38 @@ const LEGACY_TOOLS = [
   console.log(`SEMVER_OK ${cases.length} 条`);
 }
 
+// facet 的模板清单是从 CLI 报错里取的（它没有 list 命令）。这段解析踩过一次坑：
+// Node 打栈时会**先打出错那一行的源码**，而那行里也写着 `Available: ${...}`，
+// 于是「清单」变成了两段模板字面量垃圾 —— 而 MCP 会把它当模板名交给 agent。
+// 没有这组断言，下次 Node 改栈格式还是同一个结果。
+{
+  const { parseAvailableTemplates } = await import("./dist/parse.js");
+  // 真实形状：源码行在前，真正的 Error 行在后（2026-10-02 从 facet 实测抄下来的）
+  const realCrash = [
+    "file:///x/dist/args.js:41",
+    '    throw new Error(`Unknown template "${value}". Available: ${templateNames.join(", ")}`);',
+    "          ^",
+    "",
+    'Error: Unknown template "__list_templates__". Available: warm-handbook, resume-design-folio, talk',
+    "    at toTemplateName (file:///x/dist/args.js:41:11)",
+  ].join("\n");
+  const got = parseAvailableTemplates(realCrash);
+  const want = ["warm-handbook", "resume-design-folio", "talk"];
+  if (JSON.stringify(got) !== JSON.stringify(want)) {
+    console.error(`PARSE_FAIL 真实栈形状解析错：拿到 ${JSON.stringify(got)}`);
+    process.exit(1);
+  }
+  if (parseAvailableTemplates("file:///x\n  throw new Error(`Available: ${a.join(', ')}`)\n  ^") !== null) {
+    console.error("PARSE_FAIL 只有源码行时应当返回 null（不能把模板字面量当清单）");
+    process.exit(1);
+  }
+  if (parseAvailableTemplates("完全没有可用信息") !== null) {
+    console.error("PARSE_FAIL 认不出时应当返回 null，交给调用方把原话透出来");
+    process.exit(1);
+  }
+  console.log("PARSE_OK facet 模板清单解析 3 条（含真实栈形状）");
+}
+
 // 分组选择逻辑也要测：CI 里没有 CLI，默认策略的判据就是「探测到才启用」，
 // 一旦哪天写成「永远全开」，工具 schema 的 token 成本会静默翻几倍。
 {
