@@ -13,7 +13,7 @@
     "start": "node dist/index.js",
     "prepublishOnly": "pnpm build && node scripts/prepublish-gate.mjs && node scripts/readme-gate.mjs",
     "test": "node test-mcp.mjs",
-    "pub": "cs kyvault run --env TOKEN=secret://npm/kubor-company-token -- npm publish --access public --//registry.npmjs.org/:_authToken=\"$TOKEN\"",
+    "pub": "cs kyvault run --env TOKEN=secret://npm/kubor-company-token -- sh -c 'npm publish --access public --//registry.npmjs.org/:_authToken=\"$TOKEN\"'",
     "notify": "node ../notify.mjs"
   },
   "engines": {
